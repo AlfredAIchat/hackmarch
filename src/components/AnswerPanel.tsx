@@ -124,14 +124,8 @@ function makeStrongRenderer(
 ) {
     return function StrongNode({ children }: { children?: React.ReactNode }) {
         const text = String(children ?? '');
-        const termLower = text.toLowerCase();
-        // Check if this bold term matches a concept (case-insensitive partial match)
-        const matched = conceptTerms.has(termLower) || [...conceptTerms].some(t => termLower.includes(t) || t.includes(termLower));
 
-        if (!matched) {
-            return <strong className="text-cyan-300 font-bold">{children}</strong>;
-        }
-
+        // ALL bold text is clickable — explore any bolded term
         return (
             <button
                 onClick={() => onExplore(text)}

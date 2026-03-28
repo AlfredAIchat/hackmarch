@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { useSessionStore } from './sessionStore';
 
 export interface SavedSession {
     id: string;
@@ -34,10 +35,13 @@ interface UserState {
     logout: () => void;
     loadFromStorage: () => void;
     saveSessionToHistory: (session: SavedSession) => void;
+    saveConversationData: (sessionId: string) => void;
+    loadConversationData: (sessionId: string) => boolean;
     updateStats: (concepts: number, quizScore: number | null) => void;
 }
 
 const STORAGE_KEY = 'rue_user_data';
+const CONV_KEY_PREFIX = 'alfred_conv_';
 
 function loadData(): { profile: UserProfile | null; sessions: SavedSession[] } {
     if (typeof window === 'undefined') return { profile: null, sessions: [] };
@@ -103,6 +107,55 @@ export const useUserStore = create<UserState>((set, get) => ({
             : null;
         persistData(profile, sessions);
         set({ savedSessions: sessions, profile });
+    },
+
+    // Save full conversation data to localStorage
+    saveConversationData: (sessionId: string) => {
+        if (typeof window === 'undefined') return;
+        const sessionStore = useSessionStore.getState();
+        const data = {
+            sessionId: sessionStore.sessionId,
+            conversationMessages: sessionStore.conversationMessages,
+            currentDepth: sessionStore.currentDepth,
+            latestConcepts: sessionStore.latestConcepts,
+            rawTree: sessionStore.rawTree,
+            timeline: sessionStore.timeline,
+        };
+        try {
+            localStorage.setItem(CONV_KEY_PREFIX + sessionId, JSON.stringify(data));
+        } catch { }
+    },
+
+    // Load conversation data from localStorage and restore session
+    loadConversationData: (sessionId: string): boolean => {
+        if (typeof window === 'undefined') return false;
+        try {
+            const raw = localStorage.getItem(CONV_KEY_PREFIX + sessionId);
+            if (!raw) return false;
+            const data = JSON.parse(raw);
+
+            // Restore into session store
+            const sessionStore = useSessionStore.getState();
+            sessionStore.resetSession();
+            sessionStore.setSessionId(data.sessionId || sessionId);
+            sessionStore.setCurrentDepth(data.currentDepth || 0);
+            if (data.rawTree) sessionStore.updateTree(data.rawTree);
+
+            // Restore conversation messages
+            if (data.conversationMessages) {
+                for (const msg of data.conversationMessages) {
+                    if (msg.role === 'user') {
+                        sessionStore.addUserMessage(msg.content);
+                    } else if (msg.role === 'assistant') {
+                        sessionStore.addAssistantMessage(msg.content, msg.concepts || [], msg.depth || 0);
+                    }
+                }
+            }
+
+            return true;
+        } catch {
+            return false;
+        }
     },
 
     updateStats: (concepts, quizScore) => {

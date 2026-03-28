@@ -5,7 +5,7 @@ import { useSessionStore } from '@/store/sessionStore';
 import { useUserStore, SavedSession } from '@/store/userStore';
 
 export default function ChatSidebar() {
-    const { profile, savedSessions, logout } = useUserStore();
+    const { profile, savedSessions, logout, saveConversationData, loadConversationData, saveSessionToHistory } = useUserStore();
     const sessionStore = useSessionStore();
 
     const handleNewChat = () => {
@@ -21,9 +21,36 @@ export default function ChatSidebar() {
                 nodesExplored: Object.keys(sessionStore.rawTree).length,
                 quizScore: sessionStore.quizScore,
             };
-            useUserStore.getState().saveSessionToHistory(saved);
+            saveSessionToHistory(saved);
+            saveConversationData(sessionStore.sessionId);
         }
         sessionStore.resetSession();
+    };
+
+    const handleOpenSession = (session: SavedSession) => {
+        // Save current session first
+        if (sessionStore.sessionId && sessionStore.conversationMessages.length > 0) {
+            const firstMsg = sessionStore.conversationMessages.find((m) => m.role === 'user');
+            const saved: SavedSession = {
+                id: sessionStore.sessionId,
+                title: firstMsg?.content.slice(0, 50) || 'Untitled',
+                createdAt: sessionStore.timeline[0]?.timestamp || Date.now(),
+                lastUpdatedAt: Date.now(),
+                depth: sessionStore.currentDepth,
+                nodesExplored: Object.keys(sessionStore.rawTree).length,
+                quizScore: sessionStore.quizScore,
+            };
+            saveSessionToHistory(saved);
+            saveConversationData(sessionStore.sessionId);
+        }
+
+        // Load the clicked session
+        const loaded = loadConversationData(session.id);
+        if (!loaded) {
+            // No saved conversation data — just set session ID
+            sessionStore.resetSession();
+            sessionStore.setSessionId(session.id);
+        }
     };
 
     return (
@@ -58,34 +85,40 @@ export default function ChatSidebar() {
                                 Recent
                             </span>
                         </div>
-                        {savedSessions.slice(0, 20).map((session) => (
-                            <button
-                                key={session.id}
-                                className="w-full text-left px-3 py-2 rounded-lg
-                  text-gray-400 text-sm truncate
-                  hover:bg-gray-800/60 hover:text-gray-200
-                  transition-all duration-150"
-                            >
-                                <div className="truncate text-[13px]">{session.title}</div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px] text-gray-600">
-                                        depth {session.depth}
-                                    </span>
-                                    <span className="text-[10px] text-gray-700">·</span>
-                                    <span className="text-[10px] text-gray-600">
-                                        {session.nodesExplored} concepts
-                                    </span>
-                                    {session.quizScore !== null && (
-                                        <>
-                                            <span className="text-[10px] text-gray-700">·</span>
-                                            <span className="text-[10px] text-cyan-600">
-                                                {Math.round(session.quizScore)}%
-                                            </span>
-                                        </>
-                                    )}
-                                </div>
-                            </button>
-                        ))}
+                        {savedSessions.slice(0, 20).map((session) => {
+                            const isActive = sessionStore.sessionId === session.id;
+                            return (
+                                <button
+                                    key={session.id}
+                                    onClick={() => handleOpenSession(session)}
+                                    className={`w-full text-left px-3 py-2 rounded-lg
+                      text-sm truncate transition-all duration-150
+                      ${isActive
+                                            ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-300'
+                                            : 'text-gray-400 hover:bg-gray-800/60 hover:text-gray-200 border border-transparent'
+                                        }`}
+                                >
+                                    <div className="truncate text-[13px]">{session.title}</div>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="text-[10px] text-gray-600">
+                                            depth {session.depth}
+                                        </span>
+                                        <span className="text-[10px] text-gray-700">·</span>
+                                        <span className="text-[10px] text-gray-600">
+                                            {session.nodesExplored} concepts
+                                        </span>
+                                        {session.quizScore !== null && (
+                                            <>
+                                                <span className="text-[10px] text-gray-700">·</span>
+                                                <span className="text-[10px] text-cyan-600">
+                                                    {Math.round(session.quizScore)}%
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
             </div>

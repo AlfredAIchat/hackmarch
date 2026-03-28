@@ -139,6 +139,12 @@ export default function Home() {
       store.setError(err.message);
     } finally {
       store.setLoading(false);
+      setUploadedFile(null);
+      // Auto-save conversation to localStorage
+      const sid = useSessionStore.getState().sessionId;
+      if (sid) {
+        useUserStore.getState().saveConversationData(sid);
+      }
     }
   };
 

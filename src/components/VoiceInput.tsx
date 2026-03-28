@@ -9,7 +9,6 @@ interface VoiceInputProps {
 
 export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
     const [isRecording, setIsRecording] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
     const recognitionRef = useRef<any>(null);
 
     const stopRecording = useCallback(() => {
@@ -20,7 +19,6 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
         setIsRecording(false);
     }, []);
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => { stopRecording(); };
     }, [stopRecording]);
@@ -28,7 +26,7 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
     const startRecording = useCallback(() => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            alert('Voice input is not supported in this browser. Please use Chrome, Edge, or Safari.');
+            alert('Voice input not supported in this browser. Use Chrome, Edge, or Safari.');
             return;
         }
 
@@ -46,13 +44,11 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
         };
 
         recognition.onerror = (event: any) => {
-            // 'no-speech' is normal — user just didn't speak. Silently handle it.
-            if (event.error === 'no-speech' || event.error === 'aborted') {
-                // Not a real error — just no speech detected
-                setIsRecording(false);
-                return;
-            }
-            console.error('Speech recognition error:', event.error);
+            // All these are "normal" — just silently stop
+            // no-speech: user didn't speak
+            // aborted: user clicked stop
+            // network: offline or browser issue
+            // not-allowed: permission denied
             setIsRecording(false);
         };
 
@@ -66,8 +62,7 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
         try {
             recognition.start();
             setIsRecording(true);
-        } catch (err) {
-            console.error('Failed to start recognition:', err);
+        } catch {
             setIsRecording(false);
         }
     }, [onTranscript]);
@@ -83,7 +78,7 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
     return (
         <button
             onClick={toggleRecording}
-            disabled={disabled || isProcessing}
+            disabled={disabled}
             type="button"
             className={`
         flex items-center justify-center w-10 h-10 rounded-full
@@ -93,7 +88,7 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
                     : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-cyan-500 hover:text-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]'
                 }
       `}
-            title={isRecording ? 'Stop recording (click or just speak)' : 'Voice input (click and speak)'}
+            title={isRecording ? 'Stop recording' : 'Voice input'}
         >
             {isRecording ? (
                 <div className="relative">
