@@ -57,6 +57,9 @@ class StartRequest(BaseModel):
 class SelectTermRequest(BaseModel):
     session_id: str
     selected_term: str
+    difficulty_level: int | None = None
+    technicality_level: int | None = None
+    answer_depth: str | None = None
 
 
 class QuizSubmitRequest(BaseModel):
@@ -317,6 +320,14 @@ async def select_term(req: SelectTermRequest):
         raise HTTPException(404, "Session not found")
 
     state = dict(sessions[req.session_id])
+
+    # Apply updated preferences (clamped) when the user changes settings mid-session
+    if req.difficulty_level is not None:
+        state["difficulty_level"] = max(1, min(10, req.difficulty_level))
+    if req.technicality_level is not None:
+        state["technicality_level"] = max(1, min(10, req.technicality_level))
+    if req.answer_depth is not None and req.answer_depth in ["brief", "moderate", "detailed"]:
+        state["answer_depth"] = req.answer_depth
 
     state["selected_term"] = req.selected_term
     state["user_query"] = req.selected_term

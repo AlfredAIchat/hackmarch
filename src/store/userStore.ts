@@ -120,6 +120,9 @@ export const useUserStore = create<UserState>((set, get) => ({
             latestConcepts: sessionStore.latestConcepts,
             rawTree: sessionStore.rawTree,
             timeline: sessionStore.timeline,
+            difficultyLevel: sessionStore.difficultyLevel,
+            technicalityLevel: sessionStore.technicalityLevel,
+            answerDepth: sessionStore.answerDepth,
         };
         try {
             localStorage.setItem(CONV_KEY_PREFIX + sessionId, JSON.stringify(data));
@@ -140,6 +143,10 @@ export const useUserStore = create<UserState>((set, get) => ({
             sessionStore.setSessionId(data.sessionId || sessionId);
             sessionStore.setCurrentDepth(data.currentDepth || 0);
             if (data.rawTree) sessionStore.updateTree(data.rawTree);
+
+            if (data.difficultyLevel) sessionStore.setDifficultyLevel(data.difficultyLevel);
+            if (data.technicalityLevel) sessionStore.setTechnicalityLevel(data.technicalityLevel);
+            if (data.answerDepth) sessionStore.setAnswerDepth(data.answerDepth);
 
             // Restore conversation messages
             if (data.conversationMessages) {

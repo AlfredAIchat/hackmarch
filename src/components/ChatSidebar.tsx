@@ -51,7 +51,11 @@ export default function ChatSidebar() {
         currentDepth,
         conversationMessages,
     } = useSessionStore();
-    const { profile, savedSessions, isLoggedIn } = useUserStore();
+    const { profile, savedSessions, isLoggedIn, loadConversationData } = useUserStore();
+
+    const handleLoadSession = (sessionId: string) => {
+        loadConversationData(sessionId);
+    };
 
     const totalConceptsEncountered = useMemo(() => {
         let count = 0;
@@ -62,21 +66,21 @@ export default function ChatSidebar() {
     }, [conversationMessages]);
 
     return (
-        <div className="h-full flex flex-col overflow-y-auto" style={{ background: '#FFFFFF' }}>
+        <div className="h-full flex flex-col overflow-y-auto bg-white/90 backdrop-blur">
             {/* Header */}
-            <div className="p-4 border-b" style={{ borderColor: '#E2E8F0' }}>
+            <div className="p-4 border-b" style={{ borderColor: 'var(--border-light)' }}>
                 <div className="flex items-center gap-3">
                     <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white"
-                        style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+                        className="w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-black text-white"
+                        style={{ background: 'linear-gradient(135deg, var(--accent-indigo), var(--accent-sky))', boxShadow: 'var(--shadow-glow-indigo)' }}
                     >
                         {isLoggedIn && profile ? profile.displayName.charAt(0).toUpperCase() : 'A'}
                     </div>
                     <div>
-                        <p className="text-sm font-bold" style={{ color: '#0F172A' }}>
+                        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
                             {isLoggedIn && profile ? profile.displayName : 'Alfred AI'}
                         </p>
-                        <p className="text-[11px]" style={{ color: '#94A3B8' }}>
+                        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                             {isLoggedIn && profile ? `${profile.totalSessions} sessions` : 'Learning Engine'}
                         </p>
                     </div>
@@ -85,19 +89,19 @@ export default function ChatSidebar() {
 
             {/* Session Stats */}
             <div className="p-4">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: '#94A3B8' }}>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
                     Session
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                     {/* Progress Ring */}
-                    <div className="rounded-xl p-3 flex flex-col items-center" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                    <div className="subtle-card p-3 flex flex-col items-center">
                         <ProgressRing value={exploredTerms.length} max={totalConceptsEncountered} />
-                        <p className="text-[10px] font-semibold mt-1.5" style={{ color: '#94A3B8' }}>Explored</p>
+                        <p className="text-[10px] font-semibold mt-1.5" style={{ color: 'var(--text-muted)' }}>Explored</p>
                     </div>
                     {/* Depth */}
-                    <div className="rounded-xl p-3 flex flex-col items-center justify-center" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                        <div className="text-2xl font-black" style={{ color: '#6366F1' }}>{currentDepth}</div>
-                        <p className="text-[10px] font-semibold" style={{ color: '#94A3B8' }}>Depth</p>
+                    <div className="subtle-card p-3 flex flex-col items-center justify-center">
+                        <div className="text-2xl font-black" style={{ color: 'var(--accent-indigo)' }}>{currentDepth}</div>
+                        <p className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Depth</p>
                     </div>
                 </div>
             </div>
@@ -105,15 +109,14 @@ export default function ChatSidebar() {
             {/* Explored Concepts */}
             {exploredTerms.length > 0 && (
                 <div className="px-4 pb-3">
-                    <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#94A3B8' }}>
+                    <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>
                         Explored ({exploredTerms.length})
                     </h3>
                     <div className="flex flex-wrap gap-1.5">
                         {exploredTerms.map((term, i) => (
                             <span
                                 key={i}
-                                className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                                style={{ background: '#F3F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
+                                className="pill-soft text-[10px] font-semibold"
                             >
                                 ✓ {term}
                             </span>
@@ -125,20 +128,20 @@ export default function ChatSidebar() {
             {/* Past Sessions */}
             {savedSessions.length > 0 && (
                 <div className="px-4 pb-3 flex-1">
-                    <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#94A3B8' }}>
+                    <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>
                         History
                     </h3>
                     <div className="space-y-1.5">
-                        {savedSessions.slice(0, 5).map((s) => (
+                        {savedSessions.slice(0, 8).map((s) => (
                             <div
                                 key={s.id}
-                                className="px-3 py-2 rounded-lg"
-                                style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}
+                                className="subtle-card px-3 py-2 cursor-pointer hover:shadow-md transition"
+                                onClick={() => handleLoadSession(s.id)}
                             >
-                                <p className="text-[11px] font-semibold truncate" style={{ color: '#0F172A' }}>
+                                <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
                                     {s.title}
                                 </p>
-                                <p className="text-[9px] mt-0.5" style={{ color: '#94A3B8' }}>
+                                <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
                                     Depth {s.depth} • {s.nodesExplored} concepts
                                 </p>
                             </div>

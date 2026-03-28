@@ -20,6 +20,26 @@ export default function SettingsPanel({ show, onClose }: SettingsPanelProps) {
 
     if (!show) return null;
 
+    const applyPreset = (preset: 'easy' | 'balanced' | 'advanced') => {
+        switch (preset) {
+            case 'easy':
+                setDifficultyLevel(2);
+                setTechnicalityLevel(3);
+                setAnswerDepth('brief');
+                break;
+            case 'balanced':
+                setDifficultyLevel(5);
+                setTechnicalityLevel(5);
+                setAnswerDepth('moderate');
+                break;
+            case 'advanced':
+                setDifficultyLevel(8);
+                setTechnicalityLevel(8);
+                setAnswerDepth('detailed');
+                break;
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
             <div
@@ -55,6 +75,35 @@ export default function SettingsPanel({ show, onClose }: SettingsPanelProps) {
                 </div>
 
                 <div className="space-y-6">
+                    {/* Quick presets */}
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            { key: 'easy', label: 'Easy', emoji: '😊', desc: 'Simple & concise', active: difficultyLevel <= 3 },
+                            { key: 'balanced', label: 'Balanced', emoji: '🎯', desc: 'Everyday + technical', active: difficultyLevel > 3 && difficultyLevel < 7 },
+                            { key: 'advanced', label: 'Advanced', emoji: '🚀', desc: 'Deep & technical', active: difficultyLevel >= 7 },
+                        ].map((preset) => (
+                            <button
+                                key={preset.key}
+                                onClick={() => applyPreset(preset.key as 'easy' | 'balanced' | 'advanced')}
+                                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${preset.active ? 'text-white' : ''}`}
+                                style={{
+                                    background: preset.active
+                                        ? 'linear-gradient(135deg, var(--accent-indigo), var(--accent-sky))'
+                                        : '#F3F5F9',
+                                    color: preset.active ? '#fff' : 'var(--text-secondary)',
+                                    border: `1px solid ${preset.active ? 'transparent' : 'var(--border-light)'}`,
+                                    boxShadow: preset.active ? 'var(--shadow-glow-indigo)' : 'none',
+                                }}
+                            >
+                                <span>{preset.emoji}</span>
+                                <span>{preset.label}</span>
+                                <span className="text-[10px] font-medium" style={{ color: preset.active ? '#e7ecff' : 'var(--text-muted)' }}>
+                                    {preset.desc}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+
                     {/* Difficulty Level */}
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -79,6 +128,11 @@ export default function SettingsPanel({ show, onClose }: SettingsPanelProps) {
                                 background: `linear-gradient(to right, #6366F1 0%, #6366F1 ${(difficultyLevel - 1) * 11.11}%, #E2E8F0 ${(difficultyLevel - 1) * 11.11}%, #E2E8F0 100%)`
                             }}
                         />
+                        {difficultyLevel <= 3 && (
+                            <div className="pill-soft text-[11px] font-semibold inline-flex items-center gap-2">
+                                😊 Simple mode • answers stay concise
+                            </div>
+                        )}
                         <div className="flex justify-between text-[10px] font-medium" style={{ color: '#94A3B8' }}>
                             <span>Easy</span>
                             <span>Challenging</span>

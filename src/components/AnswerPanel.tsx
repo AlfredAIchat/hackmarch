@@ -15,17 +15,39 @@ function ConceptPill({
     explored: boolean;
 }) {
     const tierClass =
-        concept.relevance_score >= 0.7
-            ? 'tier-critical'
-            : concept.relevance_score >= 0.4
-                ? 'tier-important'
-                : 'tier-useful';
+        concept.relevance_score >= 0.8
+            ? 'tier-high'
+            : concept.relevance_score >= 0.5
+                ? 'tier-mid'
+                : 'tier-low';
 
     const mustLearn = concept.must_learn && !explored;
     const difficultyIcon =
         concept.difficulty === 1 ? '🟢' : concept.difficulty === 2 ? '🔵' : '🟣';
     const tierLabel =
         concept.tier || (concept.difficulty === 1 ? 'Foundation' : concept.difficulty === 2 ? 'Intermediate' : 'Advanced');
+    const score = Math.round(concept.relevance_score * 100);
+
+    // Relevance color mapping
+    const colorVariant = score >= 80 ? 'green' : score >= 50 ? 'cyan' : 'purple';
+    const variantStyles = {
+        green: {
+            bg: 'linear-gradient(135deg, #ECFDF3, #DCFCE7)',
+            border: '#34D399',
+            text: '#166534',
+        },
+        cyan: {
+            bg: 'linear-gradient(135deg, #E0F2FE, #CFFAFE)',
+            border: '#38BDF8',
+            text: '#0E7490',
+        },
+        purple: {
+            bg: 'linear-gradient(135deg, #EEF2FF, #EDE9FE)',
+            border: '#A78BFA',
+            text: '#5B21B6',
+        },
+    } as const;
+    const palette = variantStyles[colorVariant];
 
     return (
         <div className="tooltip-container inline-block">
@@ -33,9 +55,24 @@ function ConceptPill({
                 onClick={() => !explored && onClick(concept.term)}
                 disabled={explored}
                 className={`concept-pill ${tierClass} ${mustLearn ? 'must-learn' : ''} ${explored ? 'explored' : ''}`}
+                style={{
+                    background: palette.bg,
+                    borderColor: palette.border,
+                    color: palette.text,
+                    boxShadow: explored ? 'none' : '0 4px 12px rgba(0,0,0,0.04)',
+                    opacity: explored ? 0.5 : 1,
+                }}
             >
                 <span className="text-xs">{difficultyIcon}</span>
                 <span>{concept.term}</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={{
+                        background: 'rgba(255,255,255,0.9)',
+                        color: palette.text,
+                        border: `1px solid ${palette.border}55`
+                    }}>
+                    {score}%
+                </span>
                 {mustLearn && (
                     <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black"
                         style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', color: '#fff' }}>
@@ -64,11 +101,8 @@ function UserBubble({ content }: { content: string }) {
     return (
         <div className="flex justify-end mb-6 animate-slide-up">
             <div
-                className="max-w-[75%] px-5 py-3 rounded-2xl rounded-br-md text-sm font-medium text-white"
-                style={{
-                    background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
-                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.25)',
-                }}
+                className="max-w-[75%] px-5 py-3 rounded-2xl rounded-br-md text-sm font-semibold text-white shadow-md"
+                style={{ background: 'linear-gradient(135deg, var(--accent-indigo), var(--accent-violet))', boxShadow: 'var(--shadow-glow-indigo)' }}
             >
                 {content}
             </div>
@@ -107,7 +141,7 @@ function AssistantBubble({
                         A
                     </div>
                     <div
-                        className="glass-card px-5 py-4"
+                        className="glass-card px-5 py-4 shadow-sm"
                         style={{ borderRadius: '16px 16px 16px 4px' }}
                     >
                         {/* Markdown content */}
@@ -166,11 +200,11 @@ function AssistantBubble({
 
                         {/* Concept Pills */}
                         {concepts.length > 0 && isLatest && (
-                            <div className="mt-5 pt-4 border-t" style={{ borderColor: '#E2E8F0' }}>
+                            <div className="mt-5 pt-4 border-t" style={{ borderColor: 'var(--border-light)' }}>
                                 {mustLearnConcepts.length > 0 && (
                                     <div className="mb-3">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <span className="text-xs font-bold" style={{ color: '#6366F1' }}>
+                                            <span className="text-xs font-bold" style={{ color: 'var(--accent-indigo)' }}>
                                                 ⚡ Must Learn
                                             </span>
                                             <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, #6366F120, transparent)' }} />
@@ -291,7 +325,7 @@ export default function AnswerPanel({
                         >
                             A
                         </div>
-                        <div className="glass-card px-5 py-4 flex items-center gap-2" style={{ borderRadius: '16px 16px 16px 4px' }}>
+                                <div className="glass-card px-5 py-4 flex items-center gap-2" style={{ borderRadius: '16px 16px 16px 4px' }}>
                             <div className="flex gap-1.5">
                                 {[0, 1, 2].map((i) => (
                                     <div

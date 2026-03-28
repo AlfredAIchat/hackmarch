@@ -43,6 +43,20 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const buildRequestPayload = (base: Record<string, any>) => {
+    const isEasy = store.difficultyLevel <= 3;
+    const effectiveDepth: 'brief' | 'moderate' | 'detailed' = isEasy ? 'brief' : store.answerDepth;
+    const effectiveTechnicality = isEasy ? Math.min(store.technicalityLevel, 4) : store.technicalityLevel;
+
+    return {
+      ...base,
+      difficulty_level: store.difficultyLevel,
+      technicality_level: effectiveTechnicality,
+      answer_depth: effectiveDepth,
+      simplicity: isEasy ? 'simple' : 'default',
+    };
+  };
+
   useEffect(() => {
     setMounted(true);
     loadFromStorage();
@@ -80,13 +94,10 @@ export default function Home() {
       const resp = await fetch('/api/select-term', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(buildRequestPayload({
           session_id: store.sessionId,
           selected_term: term,
-          difficulty_level: store.difficultyLevel,
-          technicality_level: store.technicalityLevel,
-          answer_depth: store.answerDepth,
-        }),
+        })),
       });
 
       const reader = resp.body?.getReader();
@@ -183,13 +194,10 @@ export default function Home() {
       const resp = await fetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(buildRequestPayload({
           query,
           session_id: store.sessionId || undefined,
-          difficulty_level: store.difficultyLevel,
-          technicality_level: store.technicalityLevel,
-          answer_depth: store.answerDepth,
-        }),
+        })),
       });
 
       const reader = resp.body?.getReader();
@@ -254,11 +262,13 @@ export default function Home() {
   const treeNodeCount = Object.keys(store.rawTree).length;
 
   return (
-    <main className="h-screen w-screen flex overflow-hidden" style={{ background: '#FAFBFD' }}>
+    <main className="app-shell">
+      <div className="shell-grid" />
+
       {/* ─── Sidebar ─── */}
       <div
-        className={`shrink-0 transition-all duration-300 overflow-hidden ${sidebarOpen ? 'w-64' : 'w-0'}`}
-        style={{ borderRight: sidebarOpen ? '1px solid #E2E8F0' : 'none' }}
+        className={`shrink-0 transition-all duration-300 overflow-hidden bg-white/90 backdrop-blur ${sidebarOpen ? 'w-64' : 'w-0'}`}
+        style={{ borderRight: sidebarOpen ? '1px solid var(--border-light)' : 'none' }}
       >
         <ChatSidebar />
       </div>
@@ -266,49 +276,40 @@ export default function Home() {
       {/* ─── Main Chat Area ─── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header
-          className="h-14 flex items-center justify-between px-5 shrink-0"
-          style={{
-            background: 'rgba(255,255,255,0.92)',
-            backdropFilter: 'blur(16px)',
-            borderBottom: '1px solid #E2E8F0',
-          }}
-        >
+        <header className="h-16 flex items-center justify-between px-6 shrink-0 panel-surface">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-xl transition-all"
-              style={{ color: '#94A3B8' }}
+              className="btn-ghost px-3 py-2"
+              aria-label="Toggle sidebar"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
               </svg>
             </button>
 
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white"
-                style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', boxShadow: '0 2px 10px rgba(99,102,241,0.3)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-black text-white"
+                style={{ background: 'linear-gradient(135deg, var(--accent-indigo), var(--accent-sky))', boxShadow: 'var(--shadow-glow-indigo)' }}>
                 A
               </div>
               <div>
-                <span className="text-sm font-bold" style={{ color: '#0F172A' }}>Alfred AI</span>
-                <span className="text-[10px] block -mt-0.5" style={{ color: '#94A3B8' }}>Recursive Learning Engine</span>
+                <span className="text-sm font-bold block" style={{ color: 'var(--text-primary)' }}>Alfred AI</span>
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Recursive Learning Engine</span>
               </div>
             </div>
 
-            {/* Depth badge */}
             {store.currentDepth > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full"
-                style={{ background: '#EEF2FF', border: '1px solid #C7D2FE' }}>
-                <span className="text-[11px] font-bold" style={{ color: '#6366F1' }}>
+              <div className="chip">
+                <span className="text-[11px] font-bold" style={{ color: 'var(--accent-indigo)' }}>
                   Depth {store.currentDepth}
                 </span>
-                <div className="w-14 h-1.5 rounded-full overflow-hidden" style={{ background: '#C7D2FE' }}>
+                <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border-medium)' }}>
                   <div
                     className="h-full rounded-full transition-all duration-700"
                     style={{
                       width: `${Math.min((store.currentDepth / 10) * 100, 100)}%`,
-                      background: 'linear-gradient(90deg, #6366F1, #8B5CF6)',
+                      background: 'linear-gradient(90deg, var(--accent-indigo), var(--accent-sky))',
                     }}
                   />
                 </div>
@@ -316,47 +317,30 @@ export default function Home() {
             )}
           </div>
 
-          {/* Right controls */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
-              style={{ background: '#F3F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
-            >
+            <button onClick={() => setShowSettings(true)} className="btn-ghost text-xs">
               ⚙️ Settings
             </button>
 
-            {/* Pipeline toggle */}
             <button
               onClick={() => setRightPanel(rightPanel === 'pipeline' ? 'none' : 'pipeline')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
-              style={{
-                background: rightPanel === 'pipeline' ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : '#F3F5F9',
-                color: rightPanel === 'pipeline' ? '#fff' : '#475569',
-                border: rightPanel === 'pipeline' ? 'none' : '1px solid #E2E8F0',
-                boxShadow: rightPanel === 'pipeline' ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
-              }}
+              className={`btn-ghost text-xs ${rightPanel === 'pipeline' ? 'bg-gradient-to-r from-[var(--accent-indigo)] to-[var(--accent-sky)] text-white border-none' : ''}`}
+              style={rightPanel === 'pipeline' ? { boxShadow: 'var(--shadow-glow-indigo)' } : {}}
             >
               ⚡ Pipeline
             </button>
 
-            {/* Tree toggle */}
             <button
               onClick={() => setRightPanel(rightPanel === 'tree' ? 'none' : 'tree')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
-              style={{
-                background: rightPanel === 'tree' ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : '#F3F5F9',
-                color: rightPanel === 'tree' ? '#fff' : '#475569',
-                border: rightPanel === 'tree' ? 'none' : '1px solid #E2E8F0',
-                boxShadow: rightPanel === 'tree' ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
-              }}
+              className={`btn-ghost text-xs ${rightPanel === 'tree' ? 'bg-gradient-to-r from-[var(--accent-indigo)] to-[var(--accent-violet)] text-white border-none' : ''}`}
+              style={rightPanel === 'tree' ? { boxShadow: 'var(--shadow-glow-indigo)' } : {}}
             >
               🧠 Tree
               {treeNodeCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold"
+                <span className="ml-2 px-2 py-0.5 rounded-md text-[10px] font-bold"
                   style={{
-                    background: rightPanel === 'tree' ? 'rgba(255,255,255,0.2)' : '#EEF2FF',
-                    color: rightPanel === 'tree' ? '#fff' : '#6366F1',
+                    background: rightPanel === 'tree' ? 'rgba(255,255,255,0.2)' : 'var(--bg-tertiary)',
+                    color: rightPanel === 'tree' ? '#fff' : 'var(--accent-indigo)',
                   }}>
                   {treeNodeCount}
                 </span>
@@ -365,11 +349,7 @@ export default function Home() {
 
             {store.sessionId && (
               <>
-                <button
-                  onClick={() => store.setShowQuiz(true)}
-                  className="px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
-                  style={{ background: '#F3F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
-                >
+                <button onClick={() => store.fetchQuiz()} className="btn-ghost text-xs">
                   🧪 Quiz
                 </button>
                 <button
@@ -383,8 +363,7 @@ export default function Home() {
                       store.setShowReport(true);
                     } catch { }
                   }}
-                  className="px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
-                  style={{ background: '#F3F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
+                  className="btn-ghost text-xs"
                 >
                   📊 Report
                 </button>
@@ -396,7 +375,7 @@ export default function Home() {
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Chat */}
-          <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#FAFBFD' }}>
+          <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
             <div className="flex-1 overflow-hidden">
               <AnswerPanel onConceptClick={handleConceptClick} />
             </div>
@@ -411,7 +390,7 @@ export default function Home() {
             )}
 
             {/* Input bar */}
-            <div className="shrink-0 p-4" style={{ background: '#FFFFFF', borderTop: '1px solid #E2E8F0' }}>
+            <div className="shrink-0 p-4" style={{ background: 'transparent' }}>
               <div className="max-w-3xl mx-auto">
                 <form onSubmit={handleSubmit}>
                   <input
@@ -421,15 +400,14 @@ export default function Home() {
                     onChange={handleFileUpload}
                     className="hidden"
                   />
-                  <div className="flex items-center gap-2 rounded-2xl px-3 py-1.5 transition-all"
-                    style={{ background: '#FFFFFF', border: '2px solid #E2E8F0' }}>
+                  <div className="input-rail">
                     {/* File upload */}
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={store.isLoading || isUploading}
-                      className="p-2 rounded-xl transition-all disabled:opacity-30"
-                      style={{ color: '#94A3B8' }}
+                      className="btn-ghost p-2 disabled:opacity-40"
+                      style={{ border: 'none', background: 'transparent', boxShadow: 'none', paddingInline: '10px' }}
                       title="Upload file"
                     >
                       {isUploading ? (
@@ -457,18 +435,14 @@ export default function Home() {
                       }
                       disabled={store.isLoading}
                       className="flex-1 px-2 py-2 bg-transparent text-sm focus:outline-none disabled:opacity-50"
-                      style={{ color: '#0F172A' }}
+                      style={{ color: 'var(--text-primary)' }}
                     />
 
                     {/* Submit */}
                     <button
                       type="submit"
                       disabled={store.isLoading || !queryInput.trim()}
-                      className="p-2.5 rounded-xl text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                      style={{
-                        background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
-                        boxShadow: '0 2px 10px rgba(99,102,241,0.3)',
-                      }}
+                      className="btn-primary px-4 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {store.isLoading ? (
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -484,10 +458,9 @@ export default function Home() {
                   {/* Uploaded file pill */}
                   {uploadedFile && (
                     <div className="mt-2 flex items-center gap-2">
-                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium"
-                        style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', color: '#6366F1' }}>
+                      <div className="pill-soft inline-flex items-center gap-2">
                         📎 {uploadedFile.name}
-                        <button onClick={() => setUploadedFile(null)} style={{ color: '#94A3B8' }}>×</button>
+                        <button onClick={() => setUploadedFile(null)} style={{ color: 'var(--text-muted)' }}>×</button>
                       </div>
                     </div>
                   )}
@@ -504,7 +477,7 @@ export default function Home() {
           {rightPanel !== 'none' && (
             <div
               className="w-[480px] shrink-0 overflow-hidden animate-slide-up"
-              style={{ borderLeft: '1px solid #E2E8F0', background: '#FFFFFF' }}
+              style={{ borderLeft: '1px solid var(--border-light)', background: 'rgba(255,255,255,0.94)' }}
             >
               {rightPanel === 'tree' ? <KnowledgeTree /> : <PipelineView />}
             </div>

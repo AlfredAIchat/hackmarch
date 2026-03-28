@@ -8,7 +8,7 @@ import os
 from typing import Optional
 
 from dotenv import load_dotenv
-from mistralai import Mistral
+from mistralai.client import Mistral
 
 # Load .env from backend/ directory (where API keys live)
 _backend_dir = os.path.dirname(os.path.abspath(__file__))

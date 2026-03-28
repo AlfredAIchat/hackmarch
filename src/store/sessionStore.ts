@@ -103,6 +103,7 @@ interface SessionState {
   updateTree: (tree: Record<string, any>) => void;
   addTimelineEntry: (entry: TimelineEntry) => void;
   setQuizQuestions: (questions: QuizQuestion[]) => void;
+  fetchQuiz: () => Promise<void>;
   setQuizScore: (score: number) => void;
   setQuizResults: (results: any[]) => void;
   setShowQuiz: (show: boolean) => void;
@@ -205,6 +206,31 @@ function buildTreeFromRaw(raw: Record<string, any>): TreeNode | null {
   return buildNode(rootKeys[0]);
 }
 
+function loadSettings() {
+  if (typeof window === 'undefined') return { difficulty: 5, technicality: 5, depth: 'moderate' as const };
+  try {
+    const raw = localStorage.getItem('alfred_settings');
+    if (!raw) return { difficulty: 5, technicality: 5, depth: 'moderate' as const };
+    const data = JSON.parse(raw);
+    return {
+      difficulty: data.difficultyLevel ?? 5,
+      technicality: data.technicalityLevel ?? 5,
+      depth: data.answerDepth ?? 'moderate',
+    } as const;
+  } catch {
+    return { difficulty: 5, technicality: 5, depth: 'moderate' as const };
+  }
+}
+
+const initialSettings = loadSettings();
+
+const persistSettings = (difficulty: number, technicality: number, depth: 'brief' | 'moderate' | 'detailed') => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('alfred_settings', JSON.stringify({ difficultyLevel: difficulty, technicalityLevel: technicality, answerDepth: depth }));
+  } catch { }
+};
+
 export const useSessionStore = create<SessionState>((set, get) => ({
   sessionId: '',
   isLoading: false,
@@ -226,9 +252,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   showReport: false,
 
   // User preferences with defaults
-  difficultyLevel: 5,
-  technicalityLevel: 5,
-  answerDepth: 'moderate',
+  difficultyLevel: initialSettings.difficulty,
+  technicalityLevel: initialSettings.technicality,
+  answerDepth: initialSettings.depth,
 
   setSessionId: (id) => set({ sessionId: id }),
   setLoading: (loading) => set({ isLoading: loading }),
@@ -297,6 +323,38 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set((state) => ({ timeline: [...state.timeline, entry] })),
 
   setQuizQuestions: (questions) => set({ quizQuestions: questions }),
+  fetchQuiz: async () => {
+    const state = get();
+    if (!state.sessionId) {
+      set({ error: 'Start a session first to take a quiz.' });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const backend = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+
+    try {
+      const resp = await fetch(`${backend}/session/quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: state.sessionId }),
+        signal: controller.signal,
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Quiz fetch failed');
+      }
+
+      set({ quizQuestions: data.quiz_questions ?? [], showQuiz: true, error: null });
+    } catch (err: any) {
+      const message = err?.name === 'AbortError' ? 'Quiz request timed out' : (err?.message || 'Unable to load quiz questions');
+      set({ error: message });
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
   setQuizScore: (score) => set({ quizScore: score }),
   setQuizResults: (results) => set({ quizResults: results }),
   setShowQuiz: (show) => set({ showQuiz: show }),
@@ -305,30 +363,50 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const state = get();
     if (!state.sessionId) return;
     try {
-      const resp = await fetch(
-        `${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000') : 'http://localhost:8000'}/session/submit-quiz`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: state.sessionId, answers }),
-        }
-      );
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const backend = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+
+      const resp = await fetch(`${backend}/session/submit-quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: state.sessionId, answers }),
+        signal: controller.signal,
+      });
       const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Quiz submit failed');
+      }
       set({
         quizScore: data.quiz_score ?? 0,
         quizResults: data.results ?? [],
       });
     } catch (err) {
-      console.error('Quiz submit error:', err);
+      const message = (err as any)?.name === 'AbortError' ? 'Quiz submit timed out' : (err as any)?.message || 'Quiz submit error';
+      set({ error: message });
     }
   },
 
   setReport: (report) => set({ report }),
   setShowReport: (show) => set({ showReport: show }),
 
-  setDifficultyLevel: (level) => set({ difficultyLevel: Math.max(1, Math.min(10, level)) }),
-  setTechnicalityLevel: (level) => set({ technicalityLevel: Math.max(1, Math.min(10, level)) }),
-  setAnswerDepth: (depth) => set({ answerDepth: depth }),
+  setDifficultyLevel: (level) => {
+    const next = Math.max(1, Math.min(10, level));
+    const state = get();
+    persistSettings(next, state.technicalityLevel, state.answerDepth);
+    set({ difficultyLevel: next });
+  },
+  setTechnicalityLevel: (level) => {
+    const next = Math.max(1, Math.min(10, level));
+    const state = get();
+    persistSettings(state.difficultyLevel, next, state.answerDepth);
+    set({ technicalityLevel: next });
+  },
+  setAnswerDepth: (depth) => {
+    const state = get();
+    persistSettings(state.difficultyLevel, state.technicalityLevel, depth);
+    set({ answerDepth: depth });
+  },
 
   resetSession: () =>
     set({

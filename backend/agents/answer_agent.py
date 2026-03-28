@@ -27,26 +27,27 @@ SYSTEM_PROMPT = (
 
 # Answer depth configurations (affects length, not quality)
 DEPTH_AMOUNT_MAP = {
+    # Fixed bullet-count guidance regardless of depth, per user requirement
     'brief': {
         0: "2-3 bullet points, 1 sentence each",
-        1: "2 bullet points, 1 sentence each",
-        2: "2 short bullet points",
-        3: "2 short bullet points",
-        'deep': "2-3 concise bullet points"  # For depth >= 4
+        1: "2-3 bullet points, 1 sentence each",
+        2: "2-3 bullet points, 1 sentence each",
+        3: "2-3 bullet points, 1 sentence each",
+        'deep': "2-3 bullet points, 1 sentence each"
     },
     'moderate': {
-        0: "3-4 bullet points",
-        1: "3 bullet points",
-        2: "3 short bullet points",
-        3: "3 short bullet points",
-        'deep': "3 bullet points"
+        0: "4-5 bullet points",
+        1: "4-5 bullet points",
+        2: "4-5 bullet points",
+        3: "4-5 bullet points",
+        'deep': "4-5 bullet points"
     },
     'detailed': {
-        0: "5-6 bullet points with sub-points and practical examples",
-        1: "4-5 bullet points with examples",
-        2: "4 bullet points with details",
-        3: "3-4 bullet points with depth",
-        'deep': "4-5 bullet points with comprehensive explanations and examples"
+        0: "6-7 bullet points with examples",
+        1: "6-7 bullet points with examples",
+        2: "6-7 bullet points with examples",
+        3: "6-7 bullet points with examples",
+        'deep': "6-7 bullet points with examples"
     }
 }
 
