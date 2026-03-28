@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 
 interface VoiceInputProps {
     onTranscript: (text: string) => void;
@@ -10,14 +10,71 @@ interface VoiceInputProps {
 export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
     const [isRecording, setIsRecording] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [useWebSpeech, setUseWebSpeech] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
+    const recognitionRef = useRef<any>(null);
 
-    const startRecording = async () => {
+    // Check if Web Speech API is available
+    useEffect(() => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            setUseWebSpeech(true);
+        }
+    }, []);
+
+    // ── Web Speech API approach (works in Chrome/Edge/Safari) ──
+    const startWebSpeech = () => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        recognition.continuous = false;
+
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            if (transcript) {
+                onTranscript(transcript);
+            }
+            setIsRecording(false);
+        };
+
+        recognition.onerror = (event: any) => {
+            console.error('Speech recognition error:', event.error);
+            // If Web Speech fails, try Sarvam API fallback
+            if (event.error !== 'no-speech') {
+                startMediaRecording();
+            }
+            setIsRecording(false);
+        };
+
+        recognition.onend = () => {
+            setIsRecording(false);
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+        setIsRecording(true);
+    };
+
+    const stopWebSpeech = () => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            setIsRecording(false);
+        }
+    };
+
+    // ── MediaRecorder + Sarvam API approach (fallback) ──
+    const startMediaRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm;codecs=opus',
+                mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? 'audio/webm;codecs=opus'
+                    : 'audio/webm',
             });
             mediaRecorderRef.current = mediaRecorder;
             chunksRef.current = [];
@@ -45,6 +102,8 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
                     const data = await resp.json();
                     if (data.transcript) {
                         onTranscript(data.transcript);
+                    } else if (data.error) {
+                        console.error('Voice API error:', data.error);
                     }
                 } catch (err) {
                     console.error('Voice processing error:', err);
@@ -60,16 +119,33 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
         }
     };
 
-    const stopRecording = () => {
+    const stopMediaRecording = () => {
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.stop();
             setIsRecording(false);
         }
     };
 
+    // ── Unified toggle handler ──
+    const toggleRecording = () => {
+        if (isRecording) {
+            if (useWebSpeech) {
+                stopWebSpeech();
+            } else {
+                stopMediaRecording();
+            }
+        } else {
+            if (useWebSpeech) {
+                startWebSpeech();
+            } else {
+                startMediaRecording();
+            }
+        }
+    };
+
     return (
         <button
-            onClick={isRecording ? stopRecording : startRecording}
+            onClick={toggleRecording}
             disabled={disabled || isProcessing}
             className={`
         flex items-center justify-center w-10 h-10 rounded-full
@@ -87,6 +163,11 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
         >
             {isProcessing ? (
                 <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+            ) : isRecording ? (
+                <div className="relative">
+                    <div className="w-4 h-4 bg-red-500 rounded-sm animate-pulse" />
+                    <div className="absolute -inset-1 bg-red-500/20 rounded-full animate-ping" />
+                </div>
             ) : (
                 <svg
                     width="16"

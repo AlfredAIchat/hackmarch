@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useSessionStore } from '@/store/sessionStore';
 
@@ -14,47 +14,58 @@ const PipelineView = dynamic(() => import('@/components/PipelineView'), {
 });
 
 export default function PipelinePage() {
-    const store = useSessionStore();
+    const updatePipelineNode = useSessionStore((s) => s.updatePipelineNode);
+    const resetPipelineNodes = useSessionStore((s) => s.resetPipelineNodes);
+    const pipelineNodes = useSessionStore((s) => s.pipelineNodes);
     const [mounted, setMounted] = useState(false);
     const [liveSessionId, setLiveSessionId] = useState('');
     const [liveDepth, setLiveDepth] = useState(0);
     const [liveQuery, setLiveQuery] = useState('');
-    const pollRef = useRef<NodeJS.Timeout | null>(null);
+    const lastTsRef = useRef(0);
+
+    const poll = useCallback(() => {
+        try {
+            const raw = localStorage.getItem('alfred_pipeline_state');
+            if (!raw) return;
+            const data = JSON.parse(raw);
+
+            // Only apply if data is recent (within last 60 seconds)
+            if (Date.now() - data.ts > 60000) return;
+
+            // Skip if we already processed this exact timestamp
+            if (data.ts === lastTsRef.current) return;
+            lastTsRef.current = data.ts;
+
+            // If reset flag is set, reset all nodes first
+            if (data.reset) {
+                resetPipelineNodes();
+                return;
+            }
+
+            // Apply node statuses
+            if (data.nodes) {
+                data.nodes.forEach((n: { id: string; status: 'idle' | 'active' | 'complete' | 'error' }) => {
+                    updatePipelineNode(n.id, n.status);
+                });
+            }
+            if (data.sessionId) setLiveSessionId(data.sessionId);
+            if (data.depth !== undefined) setLiveDepth(data.depth);
+            if (data.query) setLiveQuery(data.query);
+        } catch { }
+    }, [updatePipelineNode, resetPipelineNodes]);
 
     useEffect(() => {
         setMounted(true);
-
-        // Poll localStorage for pipeline updates broadcast by the chat page (cross-tab sync)
-        const poll = () => {
-            try {
-                const raw = localStorage.getItem('alfred_pipeline_state');
-                if (!raw) return;
-                const data = JSON.parse(raw);
-                // Only apply if data is recent (within last 30 seconds)
-                if (Date.now() - data.ts > 30000) return;
-
-                // Apply node statuses to our local store
-                if (data.nodes) {
-                    data.nodes.forEach((n: { id: string; status: 'idle' | 'active' | 'complete' | 'error' }) => {
-                        store.updatePipelineNode(n.id, n.status);
-                    });
-                }
-                if (data.sessionId) setLiveSessionId(data.sessionId);
-                if (data.depth !== undefined) setLiveDepth(data.depth);
-                if (data.query) setLiveQuery(data.query);
-            } catch { }
-        };
-
-        poll(); // initial
-        pollRef.current = setInterval(poll, 400);
-        return () => { if (pollRef.current) clearInterval(pollRef.current); };
-    }, []);
+        poll();
+        const interval = setInterval(poll, 300);
+        return () => clearInterval(interval);
+    }, [poll]);
 
     if (!mounted) return null;
 
-    const activeNodes = store.pipelineNodes.filter((n) => n.status === 'active').length;
-    const completeNodes = store.pipelineNodes.filter((n) => n.status === 'complete').length;
-    const totalNodes = store.pipelineNodes.length;
+    const activeNodes = pipelineNodes.filter((n) => n.status === 'active').length;
+    const completeNodes = pipelineNodes.filter((n) => n.status === 'complete').length;
+    const totalNodes = pipelineNodes.length;
 
     return (
         <main className="h-screen w-screen bg-[#050510] text-gray-100 flex flex-col overflow-hidden">

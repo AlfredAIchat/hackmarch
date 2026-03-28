@@ -53,6 +53,12 @@ export default function Home() {
     store.setError(null);
     store.addUserMessage(query);
     store.resetPipelineNodes();
+    // Broadcast reset to pipeline page (cross-tab)
+    try {
+      localStorage.setItem('alfred_pipeline_state', JSON.stringify({
+        reset: true, ts: Date.now(),
+      }));
+    } catch { }
     store.addTimelineEntry({
       type: 'query',
       text: query,

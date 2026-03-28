@@ -282,10 +282,13 @@ async def trigger_quiz(req: dict):
         raise HTTPException(404, "Session not found")
 
     state = sessions[session_id]
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, lambda: quiz_agent_node(state))
-    state.update(result)
-    sessions[session_id] = state
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, lambda: quiz_agent_node(state))
+        state.update(result)
+        sessions[session_id] = state
+    except Exception as e:
+        return {"quiz_questions": [], "error": str(e)}
 
     return {"quiz_questions": state.get("quiz_questions", [])}
 

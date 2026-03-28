@@ -23,6 +23,13 @@ function useExploreTermHandler() {
         store.addUserMessage(`Tell me about "${term}"`);
         store.addTimelineEntry({ type: 'term', text: term, depth: store.currentDepth + 1, timestamp: Date.now() });
 
+        // Broadcast reset to pipeline page
+        try {
+            localStorage.setItem('alfred_pipeline_state', JSON.stringify({
+                reset: true, ts: Date.now(),
+            }));
+        } catch { }
+
         try {
             const resp = await fetch('/api/select-term', {
                 method: 'POST',
@@ -51,9 +58,15 @@ function useExploreTermHandler() {
                             case 'node_activated':
                                 store.updatePipelineNode(evt.data.node, evt.data.status);
                                 // Broadcast to pipeline page via localStorage
-                                localStorage.setItem('rue_pipeline_state', JSON.stringify(
-                                    useSessionStore.getState().pipelineNodes
-                                ));
+                                try {
+                                    localStorage.setItem('alfred_pipeline_state', JSON.stringify({
+                                        nodes: useSessionStore.getState().pipelineNodes,
+                                        sessionId: useSessionStore.getState().sessionId,
+                                        depth: useSessionStore.getState().currentDepth,
+                                        query: `Exploring: ${term}`,
+                                        ts: Date.now(),
+                                    }));
+                                } catch { }
                                 break;
                             case 'answer_ready':
                                 store.addAssistantMessage(evt.data.answer, [], evt.data.depth ?? store.currentDepth + 1);
