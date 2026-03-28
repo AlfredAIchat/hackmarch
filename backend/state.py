@@ -61,3 +61,8 @@ class AlfredState(TypedDict, total=False):
 
     # File upload context
     file_context: str
+
+    # User preferences for answer customization
+    difficulty_level: int       # 1-10, default 5
+    technicality_level: int    # 1-10, default 5
+    answer_depth: str          # 'brief' | 'moderate' | 'detailed', default 'moderate'

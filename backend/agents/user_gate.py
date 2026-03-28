@@ -4,6 +4,7 @@ Updates the knowledge tree with PROPER branching structure.
 Handles both term clicks AND typed follow-up questions.
 """
 
+import hashlib
 from backend.state import AlfredState
 
 
@@ -16,8 +17,13 @@ def user_gate_node(state: AlfredState) -> dict:
     depth = state.get("current_depth", 0)
     selected = state.get("selected_term", "")
 
-    # Determine the key for this node
-    term_key = selected if selected else query[:60]
+    # Determine the key for this node (prevent collisions with hash)
+    if selected:
+        term_key = selected
+    else:
+        # Use first 30 chars + hash to prevent collisions
+        query_hash = hashlib.md5(query.encode()).hexdigest()[:8]
+        term_key = f"{query[:30]}_{query_hash}" if len(query) > 30 else query
 
     # Find the parent — for BOTH selected terms AND typed follow-up questions
     explored = list(state.get("explored_terms", []))

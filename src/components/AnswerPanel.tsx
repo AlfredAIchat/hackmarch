@@ -95,18 +95,42 @@ function ConceptPill({ concept, onExplore }: { concept: ConceptItem; onExplore: 
     // Dynamic color based on relevance_score
     const score = concept.relevance_score ?? 0.5;
     let colors;
-    if (score >= 0.8) colors = { bg: 'rgba(34,197,94,0.15)', border: '#22c55e50', text: '#4ade80' };
-    else if (score >= 0.5) colors = { bg: 'rgba(6,182,212,0.15)', border: '#06b6d450', text: '#22d3ee' };
-    else colors = { bg: 'rgba(168,85,247,0.15)', border: '#a855f750', text: '#c084fc' };
+    let shadowColor;
+    if (score >= 0.8) {
+        colors = { bg: 'linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.25))', border: '#22c55e50', text: '#4ade80' };
+        shadowColor = '34, 197, 94';
+    }
+    else if (score >= 0.5) {
+        colors = { bg: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(6,182,212,0.25))', border: '#06b6d450', text: '#22d3ee' };
+        shadowColor = '6, 182, 212';
+    }
+    else {
+        colors = { bg: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(168,85,247,0.25))', border: '#a855f750', text: '#c084fc' };
+        shadowColor = '168, 85, 247';
+    }
 
     return (
         <button
             onClick={() => onExplore(concept.term)}
             disabled={isLoading}
-            style={{ background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text }}
+            style={{
+                background: colors.bg,
+                border: `1px solid ${colors.border}`,
+                color: colors.text,
+                boxShadow: `0 0 0 rgba(${shadowColor}, 0)`,
+                transition: 'all 0.2s ease'
+            }}
             className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold
-        transition-all duration-200 hover:scale-105 hover:shadow-lg cursor-pointer
-        disabled:opacity-50 disabled:cursor-wait"
+        cursor-pointer disabled:opacity-50 disabled:cursor-wait
+        hover:scale-105 active:scale-95"
+            onMouseEnter={(e) => {
+                const target = e.currentTarget as HTMLElement;
+                target.style.boxShadow = `0 4px 12px rgba(${shadowColor}, 0.4), 0 0 8px rgba(${shadowColor}, 0.2)`;
+            }}
+            onMouseLeave={(e) => {
+                const target = e.currentTarget as HTMLElement;
+                target.style.boxShadow = `0 0 0 rgba(${shadowColor}, 0)`;
+            }}
             title={`Explore: ${concept.term} (relevance: ${Math.round(score * 100)}%)`}
         >
             <span className="text-[9px] opacity-60">→</span>

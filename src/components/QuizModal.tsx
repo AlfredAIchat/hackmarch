@@ -14,6 +14,7 @@ export default function QuizModal() {
         setQuizQuestions,
         setQuizScore,
         setQuizResults,
+        conversationMessages,
     } = useSessionStore();
 
     const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -21,11 +22,16 @@ export default function QuizModal() {
     const [submitted, setSubmitted] = useState(false);
     const [isLoadingQuiz, setIsLoadingQuiz] = useState(false);
     const [flipped, setFlipped] = useState<Record<number, boolean>>({});
+    const [errorMessage, setErrorMessage] = useState<string>('');
 
     if (!showQuiz) return null;
 
+    // Check if user has enough context for a meaningful quiz
+    const hasEnoughContext = conversationMessages.length >= 3;
+
     const loadQuiz = async () => {
         setIsLoadingQuiz(true);
+        setErrorMessage('');
         try {
             const resp = await fetch('/api/quiz', {
                 method: 'POST',
@@ -33,13 +39,21 @@ export default function QuizModal() {
                 body: JSON.stringify({ session_id: sessionId }),
             });
             const data = await resp.json();
-            setQuizQuestions(data.quiz_questions || []);
-            setCurrentQ(0);
-            setSelectedAnswers({});
-            setSubmitted(false);
-            setFlipped({});
+
+            if (data.error) {
+                setErrorMessage(data.error);
+            } else if (!data.quiz_questions || data.quiz_questions.length === 0) {
+                setErrorMessage('Not enough context yet. Explore more concepts by clicking on terms in answers to generate a quiz.');
+            } else {
+                setQuizQuestions(data.quiz_questions || []);
+                setCurrentQ(0);
+                setSelectedAnswers({});
+                setSubmitted(false);
+                setFlipped({});
+            }
         } catch (err) {
             console.error(err);
+            setErrorMessage('Failed to generate quiz. Please try again.');
         } finally {
             setIsLoadingQuiz(false);
         }
@@ -47,6 +61,7 @@ export default function QuizModal() {
 
     const submitQuiz = async () => {
         const answers = quizQuestions.map((_, i) => selectedAnswers[i] ?? -1);
+        setErrorMessage('');
         try {
             const resp = await fetch('/api/quiz', {
                 method: 'POST',
@@ -54,11 +69,17 @@ export default function QuizModal() {
                 body: JSON.stringify({ session_id: sessionId, answers }),
             });
             const data = await resp.json();
-            setQuizScore(data.quiz_score ?? 0);
-            setQuizResults(data.results || []);
-            setSubmitted(true);
+
+            if (data.error) {
+                setErrorMessage(data.error);
+            } else {
+                setQuizScore(data.quiz_score ?? 0);
+                setQuizResults(data.results || []);
+                setSubmitted(true);
+            }
         } catch (err) {
             console.error(err);
+            setErrorMessage('Failed to submit quiz. Please try again.');
         }
     };
 
@@ -80,16 +101,31 @@ export default function QuizModal() {
 
                 {/* No questions loaded yet */}
                 {quizQuestions.length === 0 && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+                    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center space-y-4">
                         <p className="text-gray-400 mb-4">
                             Generate a quiz based on the concepts you've explored.
                         </p>
+
+                        {/* Error message */}
+                        {errorMessage && (
+                            <div className="px-4 py-3 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 text-sm">
+                                {errorMessage}
+                            </div>
+                        )}
+
+                        {/* Warning for insufficient context */}
+                        {!hasEnoughContext && !errorMessage && (
+                            <div className="px-4 py-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-xs">
+                                💡 Tip: Ask a few questions and explore concepts first for a better quiz experience.
+                            </div>
+                        )}
+
                         <button
                             onClick={loadQuiz}
                             disabled={isLoadingQuiz}
                             className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600
                 text-white rounded-xl font-semibold hover:shadow-lg
-                hover:shadow-cyan-500/25 transition-all disabled:opacity-50"
+                hover:shadow-cyan-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isLoadingQuiz ? 'Generating…' : 'Generate Quiz'}
                         </button>

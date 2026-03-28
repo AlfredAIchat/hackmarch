@@ -10,6 +10,7 @@ import ChatSidebar from '@/components/ChatSidebar';
 import VoiceInput from '@/components/VoiceInput';
 import QuizModal from '@/components/QuizModal';
 import ReportView from '@/components/ReportView';
+import SettingsPanel from '@/components/SettingsPanel';
 
 const KnowledgeTree = dynamic(() => import('@/components/KnowledgeTree'), {
   ssr: false,
@@ -26,6 +27,7 @@ export default function Home() {
   const { isLoggedIn, loadFromStorage, profile } = useUserStore();
   const [queryInput, setQueryInput] = useState('');
   const [showTree, setShowTree] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<{ name: string; preview: string } | null>(null);
@@ -74,7 +76,13 @@ export default function Home() {
       const resp = await fetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, session_id: store.sessionId || undefined }),
+        body: JSON.stringify({
+          query,
+          session_id: store.sessionId || undefined,
+          difficulty_level: store.difficultyLevel,
+          technicality_level: store.technicalityLevel,
+          answer_depth: store.answerDepth,
+        }),
       });
 
       const reader = resp.body?.getReader();
@@ -186,10 +194,10 @@ export default function Home() {
   const treeNodeCount = Object.keys(store.rawTree).length;
 
   return (
-    <main className="h-screen w-screen bg-[#0a0a14] text-gray-100 flex overflow-hidden">
+    <main className="h-screen w-screen bg-[#f8fafc] text-slate-900 flex overflow-hidden">
       {/* Sidebar */}
       <div
-        className={`shrink-0 border-r border-gray-800/60 transition-all duration-300 overflow-hidden
+        className={`shrink-0 border-r border-slate-200 transition-all duration-300 overflow-hidden bg-white
           ${sidebarOpen ? 'w-64' : 'w-0'}`}
       >
         <ChatSidebar />
@@ -197,53 +205,81 @@ export default function Home() {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="h-12 border-b border-gray-800/40 flex items-center justify-between px-4 shrink-0
-          bg-[#0a0a14]/80 backdrop-blur-lg">
-          <div className="flex items-center gap-3">
+        {/* Top bar - Premium Header */}
+        <header className="h-14 border-b border-slate-200/80 flex items-center justify-between px-5 shrink-0
+          bg-white/90 backdrop-blur-lg shadow-sm">
+          <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 transition-all"
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
               </svg>
             </button>
 
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-gradient-to-br from-cyan-500 to-purple-600
-                flex items-center justify-center text-[10px] font-bold shadow-sm shadow-cyan-500/20">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600
+                flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-indigo-500/30">
                 A
               </div>
-              <span className="text-sm font-semibold text-gray-300">Alfred AI</span>
+              <div>
+                <span className="text-sm font-bold text-slate-800">Alfred AI</span>
+                <span className="text-[10px] text-slate-400 block -mt-0.5">Learning Engine</span>
+              </div>
             </div>
 
             {store.currentDepth > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono
-                bg-purple-500/10 border border-purple-500/20 text-purple-400">
-                depth {store.currentDepth}
-              </span>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100">
+                <span className="text-[11px] font-semibold text-indigo-600">
+                  Depth {store.currentDepth}
+                </span>
+                <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700 depth-progress"
+                    style={{ width: `${Math.min((store.currentDepth / 10) * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
             )}
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Settings button */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-xl
+                border border-slate-200 bg-white text-slate-600
+                hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50
+                transition-all shadow-sm"
+              title="Adjust difficulty, technicality, and answer depth"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Settings
+            </button>
+
             {/* Knowledge tree toggle */}
             <button
               onClick={() => setShowTree(!showTree)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg
-                border transition-all duration-200
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-xl
+                border transition-all shadow-sm
                 ${showTree
-                  ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
-                  : 'bg-gray-800/50 border-gray-700/50 text-gray-400 hover:text-gray-300'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-500 border-transparent text-white shadow-indigo-500/30'
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
                 }`}
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
               </svg>
               Tree
               {treeNodeCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-[9px] font-mono">
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold
+                  ${showTree ? 'bg-white/20' : 'bg-indigo-100 text-indigo-600'}`}>
                   {treeNodeCount}
                 </span>
               )}
@@ -253,9 +289,9 @@ export default function Home() {
               <>
                 <button
                   onClick={() => store.setShowQuiz(true)}
-                  className="px-3 py-1.5 text-xs bg-gray-800/50 border border-gray-700/50
-                    text-gray-400 rounded-lg hover:border-purple-500/50 hover:text-purple-400
-                    transition-all"
+                  className="px-4 py-2 text-xs font-medium bg-white border border-slate-200
+                    text-slate-600 rounded-xl hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50
+                    transition-all shadow-sm"
                 >
                   Quiz
                 </button>
@@ -270,9 +306,9 @@ export default function Home() {
                       store.setShowReport(true);
                     } catch { }
                   }}
-                  className="px-3 py-1.5 text-xs bg-gray-800/50 border border-gray-700/50
-                    text-gray-400 rounded-lg hover:border-cyan-500/50 hover:text-cyan-400
-                    transition-all"
+                  className="px-4 py-2 text-xs font-medium bg-white border border-slate-200
+                    text-slate-600 rounded-xl hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50
+                    transition-all shadow-sm"
                 >
                   Report
                 </button>
@@ -284,14 +320,14 @@ export default function Home() {
         {/* Chat content area */}
         <div className="flex-1 flex overflow-hidden">
           {/* Chat messages */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
             <div className="flex-1 overflow-hidden">
               <AnswerPanel />
             </div>
 
-            {/* Input area — centered like Claude */}
-            <div className="shrink-0 border-t border-gray-800/30 bg-[#0a0a14]">
-              <div className="max-w-3xl mx-auto px-4 py-3">
+            {/* Input area — Premium Design */}
+            <div className="shrink-0 border-t border-slate-200/80 bg-white p-4">
+              <div className="max-w-3xl mx-auto">
                 <form onSubmit={handleSubmit}>
                   <input
                     ref={fileInputRef}
@@ -300,22 +336,22 @@ export default function Home() {
                     onChange={handleFileUpload}
                     className="hidden"
                   />
-                  <div className="flex items-center gap-2 bg-gray-900/60 border border-gray-700/60
-                    rounded-2xl px-3 py-1 focus-within:border-cyan-500/30 focus-within:ring-1
-                    focus-within:ring-cyan-500/20 transition-all">
+                  <div className="flex items-center gap-3 bg-white border-2 border-slate-200
+                    rounded-2xl px-4 py-2 focus-within:border-indigo-400 focus-within:shadow-lg
+                    focus-within:shadow-indigo-500/10 transition-all">
                     {/* File upload button */}
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={store.isLoading || isUploading}
-                      className="p-2 rounded-lg text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10
+                      className="p-2 rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-indigo-50
                         disabled:opacity-30 transition-all"
                       title="Upload file (PDF, image, text)"
                     >
                       {isUploading ? (
-                        <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-5 h-5 border-2 border-slate-300 border-t-indigo-500 rounded-full animate-spin" />
                       ) : (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                             d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                         </svg>
@@ -330,26 +366,27 @@ export default function Home() {
                       value={queryInput}
                       onChange={(e) => setQueryInput(e.target.value)}
                       placeholder={store.conversationMessages.length === 0
-                        ? 'Ask any knowledge question…'
-                        : 'Ask a follow-up or new question…'
+                        ? 'Ask any question to start learning...'
+                        : 'Continue exploring or ask something new...'
                       }
                       disabled={store.isLoading}
-                      className="flex-1 px-2 py-2.5 bg-transparent text-sm text-gray-200
-                        placeholder-gray-600 focus:outline-none disabled:opacity-50"
+                      className="flex-1 px-2 py-2 bg-transparent text-[15px] text-slate-800
+                        placeholder-slate-400 focus:outline-none disabled:opacity-50"
                     />
                     <button
                       type="submit"
                       disabled={store.isLoading || !queryInput.trim()}
-                      className="p-2 rounded-xl text-gray-500
-                        hover:text-cyan-400 hover:bg-cyan-500/10
-                        disabled:opacity-30 disabled:cursor-not-allowed
-                        transition-all"
+                      className="p-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500
+                        text-white shadow-lg shadow-indigo-500/30
+                        hover:shadow-xl hover:shadow-indigo-500/40 hover:scale-105
+                        disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100
+                        disabled:shadow-none transition-all"
                     >
                       {store.isLoading ? (
-                        <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       ) : (
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
                             d="M12 19V5m0 0l-7 7m7-7l7 7" />
                         </svg>
                       )}
@@ -357,17 +394,17 @@ export default function Home() {
                   </div>
                   {/* Uploaded file pill */}
                   {uploadedFile && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full
-                        bg-cyan-500/10 border border-cyan-500/20 text-xs text-cyan-400">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl
+                        bg-indigo-50 border border-indigo-200 text-sm text-indigo-600 font-medium">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         {uploadedFile.name}
                         <button
                           onClick={() => setUploadedFile(null)}
-                          className="ml-1 text-gray-500 hover:text-red-400 transition-colors"
+                          className="ml-1 text-slate-400 hover:text-red-500 transition-colors"
                         >
                           ×
                         </button>
@@ -375,17 +412,17 @@ export default function Home() {
                     </div>
                   )}
                 </form>
-                <p className="text-center text-[10px] text-gray-700 mt-2">
-                  Alfred AI uses Mistral AI. Click highlighted concepts to explore deeper.
+                <p className="text-center text-xs text-slate-400 mt-3">
+                  Click <span className="text-indigo-500 font-medium">highlighted concepts</span> in answers to explore deeper
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Knowledge tree panel (toggleable) */}
+          {/* Knowledge tree panel (toggleable) - LARGER */}
           {showTree && (
-            <div className="w-80 shrink-0 border-l border-gray-800/40 overflow-hidden
-              animate-in slide-in-from-right">
+            <div className="w-[450px] shrink-0 border-l border-slate-200 overflow-hidden bg-white
+              animate-slide-in-right shadow-xl">
               <KnowledgeTree />
             </div>
           )}
@@ -395,6 +432,7 @@ export default function Home() {
       {/* Modals */}
       <QuizModal />
       <ReportView />
+      <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} />
     </main>
   );
 }

@@ -76,6 +76,11 @@ interface SessionState {
   report: string;
   showReport: boolean;
 
+  // User Preferences (for answer customization)
+  difficultyLevel: number;      // 1-10, default 5
+  technicalityLevel: number;    // 1-10, default 5
+  answerDepth: 'brief' | 'moderate' | 'detailed';  // default 'moderate'
+
   // Actions
   setSessionId: (id: string) => void;
   setLoading: (loading: boolean) => void;
@@ -94,6 +99,9 @@ interface SessionState {
   setShowQuiz: (show: boolean) => void;
   setReport: (report: string) => void;
   setShowReport: (show: boolean) => void;
+  setDifficultyLevel: (level: number) => void;
+  setTechnicalityLevel: (level: number) => void;
+  setAnswerDepth: (depth: 'brief' | 'moderate' | 'detailed') => void;
   resetSession: () => void;
 }
 
@@ -114,24 +122,46 @@ const DEFAULT_PIPELINE_NODES: PipelineNode[] = [
 function buildTreeFromRaw(raw: Record<string, any>): TreeNode | null {
   if (!raw || Object.keys(raw).length === 0) return null;
 
-  // Find root (node with no parent or parent not in tree)
-  let rootKey: string | null = null;
+  // Find ALL root nodes (nodes with no parent or parent not in tree)
+  const rootKeys: string[] = [];
   for (const [key, val] of Object.entries(raw)) {
     if (!val.parent || !(val.parent in raw)) {
-      rootKey = key;
-      break;
+      rootKeys.push(key);
     }
   }
-  if (!rootKey) rootKey = Object.keys(raw)[0];
+
+  // Fallback if no roots found (shouldn't happen, but safety first)
+  if (rootKeys.length === 0) {
+    rootKeys.push(Object.keys(raw)[0]);
+  }
 
   const visited = new Set<string>();
 
-  function buildNode(key: string): TreeNode {
+  function buildNode(key: string, isExplored: boolean = true): TreeNode {
     visited.add(key);
     const node = raw[key] || {};
-    const children: TreeNode[] = (node.children || [])
-      .filter((c: string) => c in raw && !visited.has(c))
-      .map((c: string) => buildNode(c));
+
+    // Include both explored and unexplored children
+    const children: TreeNode[] = [];
+
+    // Add explored children (exist in raw tree)
+    for (const childKey of (node.children || [])) {
+      if (!visited.has(childKey)) {
+        if (childKey in raw) {
+          children.push(buildNode(childKey, true));
+        } else {
+          // Unexplored child - add as placeholder
+          children.push({
+            name: childKey.length > 30 ? childKey.substring(0, 27) + '…' : childKey,
+            attributes: {
+              depth: String((node.depth ?? 0) + 1),
+              fullName: childKey,
+              explored: 'false',
+            },
+          });
+        }
+      }
+    }
 
     const shortName = key.length > 30 ? key.substring(0, 27) + '…' : key;
 
@@ -140,12 +170,29 @@ function buildTreeFromRaw(raw: Record<string, any>): TreeNode | null {
       attributes: {
         depth: String(node.depth ?? 0),
         fullName: key,
+        explored: isExplored ? 'true' : 'false',
       },
       children: children.length > 0 ? children : undefined,
     };
   }
 
-  return buildNode(rootKey);
+  // If multiple roots, create a virtual "Knowledge Map" root
+  if (rootKeys.length > 1) {
+    const rootChildren = rootKeys.map(key => buildNode(key));
+    return {
+      name: 'Knowledge Map',
+      attributes: {
+        depth: '-1',
+        fullName: 'Knowledge Map',
+        explored: 'true',
+        virtual: 'true',
+      },
+      children: rootChildren,
+    };
+  }
+
+  // Single root - build normally
+  return buildNode(rootKeys[0]);
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -165,6 +212,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   showQuiz: false,
   report: '',
   showReport: false,
+
+  // User preferences with defaults
+  difficultyLevel: 5,
+  technicalityLevel: 5,
+  answerDepth: 'moderate',
 
   setSessionId: (id) => set({ sessionId: id }),
   setLoading: (loading) => set({ isLoading: loading }),
@@ -229,6 +281,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   setReport: (report) => set({ report }),
   setShowReport: (show) => set({ showReport: show }),
 
+  setDifficultyLevel: (level) => set({ difficultyLevel: Math.max(1, Math.min(10, level)) }),
+  setTechnicalityLevel: (level) => set({ technicalityLevel: Math.max(1, Math.min(10, level)) }),
+  setAnswerDepth: (depth) => set({ answerDepth: depth }),
+
   resetSession: () =>
     set({
       sessionId: '',
@@ -247,5 +303,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       showQuiz: false,
       report: '',
       showReport: false,
+      // Keep user preferences on reset
     }),
 }));

@@ -49,6 +49,9 @@ sessions: dict[str, dict[str, Any]] = {}
 class StartRequest(BaseModel):
     query: str
     session_id: str | None = None
+    difficulty_level: int = 5       # 1-10, default 5
+    technicality_level: int = 5     # 1-10, default 5
+    answer_depth: str = "moderate"  # 'brief' | 'moderate' | 'detailed'
 
 
 class SelectTermRequest(BaseModel):
@@ -119,6 +122,11 @@ async def start_session(req: StartRequest):
     if not query:
         raise HTTPException(400, "Query cannot be empty")
 
+    # Validate and clamp preference values
+    difficulty = max(1, min(10, req.difficulty_level))
+    technicality = max(1, min(10, req.technicality_level))
+    depth = req.answer_depth if req.answer_depth in ["brief", "moderate", "detailed"] else "moderate"
+
     # Check if this is a follow-up question to an existing session
     existing_state = sessions.get(session_id)
     is_continuation = False
@@ -138,13 +146,28 @@ async def start_session(req: StartRequest):
             state["current_depth"] = state.get("current_depth", 0) + 1
             state["selected_term"] = ""
             state["file_context"] = state.get("file_context", "")
+            # Update preferences
+            state["difficulty_level"] = difficulty
+            state["technicality_level"] = technicality
+            state["answer_depth"] = depth
         else:
             # Completely new topic — but preserve file_context if it exists
             old_file_ctx = existing_state.get("file_context", "")
-            state = _make_fresh_state(session_id, query, file_context=old_file_ctx)
+            state = _make_fresh_state(
+                session_id, query,
+                file_context=old_file_ctx,
+                difficulty_level=difficulty,
+                technicality_level=technicality,
+                answer_depth=depth
+            )
     else:
         # First question in this session
-        state = _make_fresh_state(session_id, query)
+        state = _make_fresh_state(
+            session_id, query,
+            difficulty_level=difficulty,
+            technicality_level=technicality,
+            answer_depth=depth
+        )
 
     config = {"configurable": {"thread_id": session_id}}
 
@@ -251,7 +274,14 @@ async def start_session(req: StartRequest):
     )
 
 
-def _make_fresh_state(session_id: str, query: str, file_context: str = "") -> dict:
+def _make_fresh_state(
+    session_id: str,
+    query: str,
+    file_context: str = "",
+    difficulty_level: int = 5,
+    technicality_level: int = 5,
+    answer_depth: str = "moderate"
+) -> dict:
     """Create a fresh initial state for a new session/topic."""
     return {
         "session_id": session_id,
@@ -275,6 +305,9 @@ def _make_fresh_state(session_id: str, query: str, file_context: str = "") -> di
         "cleaned_query": query,
         "reject_reason": "",
         "file_context": file_context,
+        "difficulty_level": difficulty_level,
+        "technicality_level": technicality_level,
+        "answer_depth": answer_depth,
     }
 
 
