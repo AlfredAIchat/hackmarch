@@ -30,12 +30,12 @@ SYSTEM_PROMPT = (
     "reference the journey so far and how this new concept fits into the bigger picture."
 )
 
-# Depth-specific length instructions
+# Depth-specific length instructions — SHORT AT ALL DEPTHS
 DEPTH_INSTRUCTIONS = {
-    0: "Give a thorough explanation with 4-5 bullet points, each 1-2 sentences. Include a one-line analogy at the start.",
-    1: "Give a clear explanation with 3-4 bullet points, each 1-2 sentences.",
-    2: "Be concise. 3 bullet points max, each ONE sentence. Get straight to the point.",
-    3: "Be very brief. 2-3 short bullet points only. No fluff.",
+    0: "Keep it SHORT: max 3 concise bullet points, each 1 sentence. Include one quick analogy. Total answer under 120 words.",
+    1: "Be brief: 2-3 bullet points, each 1 sentence. Total under 80 words.",
+    2: "Very concise: 2 bullet points only, each ONE short sentence. Under 50 words total.",
+    3: "Ultra-brief: 1-2 bullet points. Maximum 30 words total. Just the key insight.",
 }
 
 
@@ -55,6 +55,7 @@ def answer_agent_node(state: AlfredState) -> dict:
     query = state.get("user_query", "")
     depth = state.get("current_depth", 0)
     explored = state.get("explored_terms", [])
+    file_context = state.get("file_context", "")
 
     # Build system prompt with depth-specific length instruction
     length_rule = _get_length_instruction(depth)
@@ -63,18 +64,22 @@ def answer_agent_node(state: AlfredState) -> dict:
     messages = [{"role": "system", "content": system}]
 
     # Include conversation history so the LLM knows what was already discussed
-    messages.extend(history)
+    messages.extend(history[-6:])  # Last 3 exchanges max
 
     # Build the user message with additional context signals
     user_msg = query
+    if file_context:
+        user_msg = f"[The user uploaded a file. Here is the extracted content:\n{file_context[:3000]}\n]\n\nUser question: {query}"
+
     if depth > 0 and explored:
         user_msg += (
-            f"\n\n[Context: We are at depth {depth}. "
-            f"Previously explored: {', '.join(explored)}. "
-            f"Make sure your answer connects to this learning journey "
-            f"and references what we discussed before. "
-            f"IMPORTANT: Keep this answer SHORT — {length_rule}]"
+            f"\n\n[Context: Depth {depth}. "
+            f"Previously explored: {', '.join(explored[-5:])}. "
+            f"Connect to what we discussed. "
+            f"CRITICAL: {length_rule}]"
         )
+    else:
+        user_msg += f"\n\n[CRITICAL: {length_rule}]"
 
     messages.append({"role": "user", "content": user_msg})
 

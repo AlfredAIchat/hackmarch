@@ -58,3 +58,6 @@ class AlfredState(TypedDict, total=False):
 
     # Report
     final_report: str
+
+    # File upload context
+    file_context: str

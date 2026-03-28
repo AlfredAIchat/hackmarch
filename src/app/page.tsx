@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useSessionStore } from '@/store/sessionStore';
@@ -28,6 +28,9 @@ export default function Home() {
   const [showTree, setShowTree] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; preview: string } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -136,6 +139,39 @@ export default function Home() {
       store.setError(err.message);
     } finally {
       store.setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (store.sessionId) formData.append('session_id', store.sessionId);
+      formData.append('query', queryInput || `Analyze ${file.name}`);
+
+      const resp = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await resp.json();
+
+      if (data.session_id) {
+        store.setSessionId(data.session_id);
+      }
+      setUploadedFile({
+        name: data.filename || file.name,
+        preview: data.preview || '',
+      });
+    } catch (err) {
+      console.error('Upload error:', err);
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -251,9 +287,34 @@ export default function Home() {
             <div className="shrink-0 border-t border-gray-800/30 bg-[#0a0a14]">
               <div className="max-w-3xl mx-auto px-4 py-3">
                 <form onSubmit={handleSubmit}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.png,.jpg,.jpeg,.gif,.webp"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
                   <div className="flex items-center gap-2 bg-gray-900/60 border border-gray-700/60
                     rounded-2xl px-3 py-1 focus-within:border-cyan-500/30 focus-within:ring-1
                     focus-within:ring-cyan-500/20 transition-all">
+                    {/* File upload button */}
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={store.isLoading || isUploading}
+                      className="p-2 rounded-lg text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10
+                        disabled:opacity-30 transition-all"
+                      title="Upload file (PDF, image, text)"
+                    >
+                      {isUploading ? (
+                        <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                      )}
+                    </button>
                     <VoiceInput
                       onTranscript={(text) => setQueryInput(text)}
                       disabled={store.isLoading}
@@ -288,6 +349,25 @@ export default function Home() {
                       )}
                     </button>
                   </div>
+                  {/* Uploaded file pill */}
+                  {uploadedFile && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full
+                        bg-cyan-500/10 border border-cyan-500/20 text-xs text-cyan-400">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        {uploadedFile.name}
+                        <button
+                          onClick={() => setUploadedFile(null)}
+                          className="ml-1 text-gray-500 hover:text-red-400 transition-colors"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </form>
                 <p className="text-center text-[10px] text-gray-700 mt-2">
                   Alfred AI uses Mistral AI. Click highlighted concepts to explore deeper.
