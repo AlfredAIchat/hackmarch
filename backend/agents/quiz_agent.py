@@ -65,6 +65,14 @@ def quiz_agent_node(state: AlfredState) -> dict:
         if cleaned.startswith("json"):
             cleaned = cleaned[4:].strip()
         questions = json.loads(cleaned)
+        
+        # Handle cases where LLM wraps the array in an object
+        if isinstance(questions, dict):
+            if "quiz_questions" in questions:
+                questions = questions["quiz_questions"]
+            elif "questions" in questions:
+                questions = questions["questions"]
+                
         # Validate structure
         if not isinstance(questions, list):
             questions = []

@@ -173,7 +173,7 @@ function AssistantBubble({ message, onExplore }: { message: ConversationMessage;
     const pillConcepts = concepts.filter((c) => {
         const tl = (c.term ?? '').toLowerCase();
         return !boldTermsInText.has(tl) && ![...boldTermsInText].some(bt => tl.includes(bt) || bt.includes(tl));
-    }).sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0));
+    }).sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0)).slice(0, 5);
 
     const strongRenderer = makeStrongRenderer(
         new Set(concepts.map((c) => (c.term ?? '').toLowerCase())),

@@ -29,6 +29,7 @@ from backend.agents.user_gate import user_gate_node
 from backend.agents.quiz_agent import quiz_agent_node
 from backend.agents.answer_evaluator import answer_evaluator_node
 from backend.agents.report_agent import report_agent_node
+from backend.agents.file_reader_agent import file_reader_agent_node, extract_file_content
 from backend.llm import chat
 
 app = FastAPI(title="Alfred AI Pipeline API", version="1.0.0")
@@ -138,8 +139,9 @@ async def start_session(req: StartRequest):
             state["selected_term"] = ""
             state["file_context"] = state.get("file_context", "")
         else:
-            # Completely new topic — reset everything
-            state = _make_fresh_state(session_id, query)
+            # Completely new topic — but preserve file_context if it exists
+            old_file_ctx = existing_state.get("file_context", "")
+            state = _make_fresh_state(session_id, query, file_context=old_file_ctx)
     else:
         # First question in this session
         state = _make_fresh_state(session_id, query)
@@ -170,14 +172,19 @@ async def start_session(req: StartRequest):
                 yield _sse_event("done", {"session_id": session_id})
                 return
 
-            # 2. Context Builder (if continuation)
+            # 2. File Reader Agent (if file uploaded)
+            if state.get("file_context") and not state["file_context"].startswith("[PROCESSED]"):
+                r = await loop.run_in_executor(None, lambda: file_reader_agent_node(state))
+                state.update(r)
+
+            # 3. Context Builder (if continuation)
             if is_continuation:
                 yield _sse_event("node_activated", {"node": "context_builder", "status": "active"})
                 r = await loop.run_in_executor(None, lambda: context_builder_node(state))
                 state.update(r)
                 yield _sse_event("node_activated", {"node": "context_builder", "status": "complete"})
 
-            # 3. Answer Agent
+            # 4. Answer Agent
             yield _sse_event("node_activated", {"node": "answer_agent", "status": "active"})
             r = await loop.run_in_executor(None, lambda: answer_agent_node(state))
             state.update(r)
@@ -244,7 +251,7 @@ async def start_session(req: StartRequest):
     )
 
 
-def _make_fresh_state(session_id: str, query: str) -> dict:
+def _make_fresh_state(session_id: str, query: str, file_context: str = "") -> dict:
     """Create a fresh initial state for a new session/topic."""
     return {
         "session_id": session_id,
@@ -267,7 +274,7 @@ def _make_fresh_state(session_id: str, query: str) -> dict:
         "valid": True,
         "cleaned_query": query,
         "reject_reason": "",
-        "file_context": "",
+        "file_context": file_context,
     }
 
 
@@ -405,9 +412,8 @@ async def upload_file(
     session_id: str = Form(""),
     query: str = Form(""),
 ):
-    """Handle file upload — extract text from PDF, images, or text files."""
+    """Handle file upload — extract text, then run file_reader_agent to summarize."""
     content_bytes = await file.read()
-    extracted_text = ""
     filename = file.filename or "unknown"
 
     # Get or create session
@@ -417,65 +423,31 @@ async def upload_file(
         session_id = session_id or str(uuid.uuid4())
         state = _make_fresh_state(session_id, query or f"Analyze {filename}")
 
-    # Extract text based on file type
-    if filename.lower().endswith(".pdf"):
-        try:
-            import PyPDF2
-            reader = PyPDF2.PdfReader(io.BytesIO(content_bytes))
-            pages = []
-            for page in reader.pages[:20]:  # Max 20 pages
-                text = page.extract_text()
-                if text:
-                    pages.append(text)
-            extracted_text = "\n\n".join(pages)
-        except ImportError:
-            extracted_text = "[PDF parsing requires PyPDF2. Install with: pip install PyPDF2]"
-        except Exception as e:
-            extracted_text = f"[Error reading PDF: {str(e)}]"
+    # Step 1: Extract raw text using file_reader_agent helper
+    extracted_text = extract_file_content(content_bytes, filename)
 
-    elif filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
-        import base64
-        b64 = base64.b64encode(content_bytes).decode()
-        # Use LLM to describe the image
-        try:
-            description = chat(
-                messages=[{
-                    "role": "user",
-                    "content": f"Describe this image in detail. The image is base64 encoded: data:image/{filename.split('.')[-1]};base64,{b64[:1000]}... [truncated for context]"
-                }],
-                temperature=0.3,
-            )
-            extracted_text = f"[Image: {filename}]\n{description}"
-        except Exception:
-            extracted_text = f"[Image uploaded: {filename} — image analysis not available]"
-
-    elif filename.lower().endswith((".txt", ".md", ".csv", ".json", ".py", ".js", ".ts", ".html", ".css")):
-        try:
-            extracted_text = content_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            extracted_text = content_bytes.decode("latin-1")
-
-    else:
-        try:
-            extracted_text = content_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            extracted_text = f"[Binary file uploaded: {filename} — cannot extract text]"
-
-    # Truncate to avoid token limits
-    if len(extracted_text) > 5000:
-        extracted_text = extracted_text[:5000] + "\n\n[... content truncated for brevity ...]"
-
-    # Store in session
+    # Step 2: Store raw text and run file_reader_agent to create summary
     state["file_context"] = extracted_text
     if query:
         state["user_query"] = query
+
+    # Step 3: Run file_reader_agent to process and summarize the file
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, lambda: file_reader_agent_node(state))
+        state.update(result)
+    except Exception as e:
+        # If agent fails, keep raw text
+        pass
+
     sessions[session_id] = state
 
     return {
         "session_id": session_id,
         "filename": filename,
-        "extracted_length": len(extracted_text),
+        "extracted_length": len(state.get("file_context", "")),
         "preview": extracted_text[:300],
+        "processed": state.get("file_context", "").startswith("[PROCESSED]"),
     }
 
 

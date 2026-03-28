@@ -1,6 +1,7 @@
 """
 User Gate — Interrupt node for user term selection.
 Updates the knowledge tree with PROPER branching structure.
+Handles both term clicks AND typed follow-up questions.
 """
 
 from backend.state import AlfredState
@@ -15,19 +16,28 @@ def user_gate_node(state: AlfredState) -> dict:
     depth = state.get("current_depth", 0)
     selected = state.get("selected_term", "")
 
-    # Determine key and parent
+    # Determine the key for this node
     term_key = selected if selected else query[:60]
 
-    # Find the parent — it's the PREVIOUS selected term (the one that led here)
+    # Find the parent — for BOTH selected terms AND typed follow-up questions
     explored = list(state.get("explored_terms", []))
-    parent = explored[-1] if explored and selected else None
+    
+    if selected:
+        # User clicked a concept pill — parent is the last explored term
+        parent = explored[-1] if explored else None
+    elif depth > 0 and explored:
+        # User typed a follow-up question at depth > 0 — parent is the last explored term
+        parent = explored[-1]
+    else:
+        # First question (depth 0) — no parent (this is a root node)
+        parent = None
 
     child_terms = [c.get("term", "") for c in concepts if isinstance(c, dict)]
 
     if term_key not in tree:
         tree[term_key] = {
             "parent": parent,
-            "answer": answer,
+            "answer": answer[:200],  # Truncate answer for tree storage
             "children": child_terms,
             "depth": depth,
         }
