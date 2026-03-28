@@ -15,8 +15,17 @@ import SettingsPanel from '@/components/SettingsPanel';
 const KnowledgeTree = dynamic(() => import('@/components/KnowledgeTree'), {
   ssr: false,
   loading: () => (
-    <div className="h-full flex items-center justify-center text-gray-600 text-sm">
+    <div className="h-full flex items-center justify-center text-sm" style={{ color: '#94A3B8' }}>
       Loading tree…
+    </div>
+  ),
+});
+
+const PipelineView = dynamic(() => import('@/components/PipelineView'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full flex items-center justify-center text-sm" style={{ color: '#94A3B8' }}>
+      Loading pipeline…
     </div>
   ),
 });
@@ -26,7 +35,7 @@ export default function Home() {
   const store = useSessionStore();
   const { isLoggedIn, loadFromStorage, profile } = useUserStore();
   const [queryInput, setQueryInput] = useState('');
-  const [showTree, setShowTree] = useState(false);
+  const [rightPanel, setRightPanel] = useState<'none' | 'tree' | 'pipeline'>('none');
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -45,6 +54,111 @@ export default function Home() {
     }
   }, [mounted, isLoggedIn, router]);
 
+  /* ─────── Concept Click → select-term API ─────── */
+  const handleConceptClick = async (term: string) => {
+    if (store.isLoading) return;
+
+    // Prevent clicking already-explored terms
+    if (store.exploredTerms.some(t => t.toLowerCase() === term.toLowerCase())) {
+      return;
+    }
+
+    store.addExploredTerm(term);
+    store.setLoading(true);
+    store.setStreaming(true);
+    store.setError(null);
+    store.addUserMessage(`Tell me about "${term}"`);
+    store.resetPipelineNodes();
+    store.addTimelineEntry({
+      type: 'term',
+      text: term,
+      depth: store.currentDepth + 1,
+      timestamp: Date.now(),
+    });
+
+    try {
+      const resp = await fetch('/api/select-term', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: store.sessionId,
+          selected_term: term,
+          difficulty_level: store.difficultyLevel,
+          technicality_level: store.technicalityLevel,
+          answer_depth: store.answerDepth,
+        }),
+      });
+
+      const reader = resp.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) return;
+
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+            handleSSEEvent(evt);
+          } catch { }
+        }
+      }
+    } catch (err: any) {
+      store.setError(err.message);
+    } finally {
+      store.setLoading(false);
+      store.setStreaming(false);
+      const sid = useSessionStore.getState().sessionId;
+      if (sid) useUserStore.getState().saveConversationData(sid);
+    }
+  };
+
+  /* ─────── SSE Event Handler (shared) ─────── */
+  const handleSSEEvent = (evt: any) => {
+    switch (evt.type) {
+      case 'session_started':
+        store.setSessionId(evt.data.session_id);
+        break;
+      case 'node_activated':
+        store.updatePipelineNode(evt.data.node, evt.data.status);
+        try {
+          localStorage.setItem('alfred_pipeline_state', JSON.stringify({
+            nodes: useSessionStore.getState().pipelineNodes,
+            sessionId: useSessionStore.getState().sessionId,
+            depth: useSessionStore.getState().currentDepth,
+            ts: Date.now(),
+          }));
+        } catch { }
+        break;
+      case 'answer_ready':
+        store.addAssistantMessage(evt.data.answer, [], evt.data.depth ?? 0);
+        break;
+      case 'concepts_ready':
+        store.addConceptsToLastMessage(evt.data.concepts);
+        break;
+      case 'tree_update':
+        store.updateTree(evt.data.tree);
+        break;
+      case 'quiz_ready':
+        store.setQuizQuestions(evt.data.quiz_questions || []);
+        break;
+      case 'rejected':
+        store.setError(evt.data.reason);
+        break;
+      case 'error':
+        store.setError(evt.data.message);
+        break;
+    }
+  };
+
+  /* ─────── Submit Query ─────── */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = queryInput.trim();
@@ -55,21 +169,14 @@ export default function Home() {
     }
 
     store.setLoading(true);
+    store.setStreaming(true);
     store.setError(null);
     store.addUserMessage(query);
     store.resetPipelineNodes();
-    // Broadcast reset to pipeline page (cross-tab)
     try {
-      localStorage.setItem('alfred_pipeline_state', JSON.stringify({
-        reset: true, ts: Date.now(),
-      }));
+      localStorage.setItem('alfred_pipeline_state', JSON.stringify({ reset: true, ts: Date.now() }));
     } catch { }
-    store.addTimelineEntry({
-      type: 'query',
-      text: query,
-      depth: 0,
-      timestamp: Date.now(),
-    });
+    store.addTimelineEntry({ type: 'query', text: query, depth: 0, timestamp: Date.now() });
     setQueryInput('');
 
     try {
@@ -100,46 +207,9 @@ export default function Home() {
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
-          const json = line.slice(6);
           try {
-            const evt = JSON.parse(json);
-            switch (evt.type) {
-              case 'session_started':
-                store.setSessionId(evt.data.session_id);
-                break;
-              case 'node_activated':
-                store.updatePipelineNode(evt.data.node, evt.data.status);
-                // Broadcast to pipeline page via localStorage (cross-tab)
-                try {
-                  localStorage.setItem('alfred_pipeline_state', JSON.stringify({
-                    nodes: useSessionStore.getState().pipelineNodes,
-                    sessionId: useSessionStore.getState().sessionId,
-                    depth: useSessionStore.getState().currentDepth,
-                    query: store.conversationMessages.filter(m => m.role === 'user').slice(-1)[0]?.content || '',
-                    ts: Date.now(),
-                  }));
-                } catch { }
-                break;
-              case 'answer_ready':
-                store.addAssistantMessage(
-                  evt.data.answer,
-                  [],
-                  evt.data.depth ?? 0
-                );
-                break;
-              case 'concepts_ready':
-                store.addConceptsToLastMessage(evt.data.concepts);
-                break;
-              case 'tree_update':
-                store.updateTree(evt.data.tree);
-                break;
-              case 'rejected':
-                store.setError(evt.data.reason);
-                break;
-              case 'error':
-                store.setError(evt.data.message);
-                break;
-            }
+            const evt = JSON.parse(line.slice(6));
+            handleSSEEvent(evt);
           } catch { }
         }
       }
@@ -147,15 +217,14 @@ export default function Home() {
       store.setError(err.message);
     } finally {
       store.setLoading(false);
+      store.setStreaming(false);
       setUploadedFile(null);
-      // Auto-save conversation to localStorage
       const sid = useSessionStore.getState().sessionId;
-      if (sid) {
-        useUserStore.getState().saveConversationData(sid);
-      }
+      if (sid) useUserStore.getState().saveConversationData(sid);
     }
   };
 
+  /* ─────── File Upload ─────── */
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -167,24 +236,15 @@ export default function Home() {
       if (store.sessionId) formData.append('session_id', store.sessionId);
       formData.append('query', queryInput || `Analyze ${file.name}`);
 
-      const resp = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      const resp = await fetch('/api/upload', { method: 'POST', body: formData });
       const data = await resp.json();
 
-      if (data.session_id) {
-        store.setSessionId(data.session_id);
-      }
-      setUploadedFile({
-        name: data.filename || file.name,
-        preview: data.preview || '',
-      });
+      if (data.session_id) store.setSessionId(data.session_id);
+      setUploadedFile({ name: data.filename || file.name, preview: data.preview || '' });
     } catch (err) {
       console.error('Upload error:', err);
     } finally {
       setIsUploading(false);
-      // Reset file input
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -194,24 +254,31 @@ export default function Home() {
   const treeNodeCount = Object.keys(store.rawTree).length;
 
   return (
-    <main className="h-screen w-screen bg-[#f8fafc] text-slate-900 flex overflow-hidden">
-      {/* Sidebar */}
+    <main className="h-screen w-screen flex overflow-hidden" style={{ background: '#FAFBFD' }}>
+      {/* ─── Sidebar ─── */}
       <div
-        className={`shrink-0 border-r border-slate-200 transition-all duration-300 overflow-hidden bg-white
-          ${sidebarOpen ? 'w-64' : 'w-0'}`}
+        className={`shrink-0 transition-all duration-300 overflow-hidden ${sidebarOpen ? 'w-64' : 'w-0'}`}
+        style={{ borderRight: sidebarOpen ? '1px solid #E2E8F0' : 'none' }}
       >
         <ChatSidebar />
       </div>
 
-      {/* Main chat area */}
+      {/* ─── Main Chat Area ─── */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar - Premium Header */}
-        <header className="h-14 border-b border-slate-200/80 flex items-center justify-between px-5 shrink-0
-          bg-white/90 backdrop-blur-lg shadow-sm">
+        {/* Header */}
+        <header
+          className="h-14 flex items-center justify-between px-5 shrink-0"
+          style={{
+            background: 'rgba(255,255,255,0.92)',
+            backdropFilter: 'blur(16px)',
+            borderBottom: '1px solid #E2E8F0',
+          }}
+        >
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+              className="p-2 rounded-xl transition-all"
+              style={{ color: '#94A3B8' }}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
@@ -219,67 +286,78 @@ export default function Home() {
             </button>
 
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600
-                flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-indigo-500/30">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white"
+                style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', boxShadow: '0 2px 10px rgba(99,102,241,0.3)' }}>
                 A
               </div>
               <div>
-                <span className="text-sm font-bold text-slate-800">Alfred AI</span>
-                <span className="text-[10px] text-slate-400 block -mt-0.5">Learning Engine</span>
+                <span className="text-sm font-bold" style={{ color: '#0F172A' }}>Alfred AI</span>
+                <span className="text-[10px] block -mt-0.5" style={{ color: '#94A3B8' }}>Recursive Learning Engine</span>
               </div>
             </div>
 
+            {/* Depth badge */}
             {store.currentDepth > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100">
-                <span className="text-[11px] font-semibold text-indigo-600">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full"
+                style={{ background: '#EEF2FF', border: '1px solid #C7D2FE' }}>
+                <span className="text-[11px] font-bold" style={{ color: '#6366F1' }}>
                   Depth {store.currentDepth}
                 </span>
-                <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div className="w-14 h-1.5 rounded-full overflow-hidden" style={{ background: '#C7D2FE' }}>
                   <div
-                    className="h-full rounded-full transition-all duration-700 depth-progress"
-                    style={{ width: `${Math.min((store.currentDepth / 10) * 100, 100)}%` }}
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${Math.min((store.currentDepth / 10) * 100, 100)}%`,
+                      background: 'linear-gradient(90deg, #6366F1, #8B5CF6)',
+                    }}
                   />
                 </div>
               </div>
             )}
           </div>
 
+          {/* Right controls */}
           <div className="flex items-center gap-2">
-            {/* Settings button */}
             <button
               onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-xl
-                border border-slate-200 bg-white text-slate-600
-                hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50
-                transition-all shadow-sm"
-              title="Adjust difficulty, technicality, and answer depth"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
+              style={{ background: '#F3F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Settings
+              ⚙️ Settings
             </button>
 
-            {/* Knowledge tree toggle */}
+            {/* Pipeline toggle */}
             <button
-              onClick={() => setShowTree(!showTree)}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-xl
-                border transition-all shadow-sm
-                ${showTree
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-500 border-transparent text-white shadow-indigo-500/30'
-                  : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
-                }`}
+              onClick={() => setRightPanel(rightPanel === 'pipeline' ? 'none' : 'pipeline')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
+              style={{
+                background: rightPanel === 'pipeline' ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : '#F3F5F9',
+                color: rightPanel === 'pipeline' ? '#fff' : '#475569',
+                border: rightPanel === 'pipeline' ? 'none' : '1px solid #E2E8F0',
+                boxShadow: rightPanel === 'pipeline' ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
+              }}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-              </svg>
-              Tree
+              ⚡ Pipeline
+            </button>
+
+            {/* Tree toggle */}
+            <button
+              onClick={() => setRightPanel(rightPanel === 'tree' ? 'none' : 'tree')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
+              style={{
+                background: rightPanel === 'tree' ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : '#F3F5F9',
+                color: rightPanel === 'tree' ? '#fff' : '#475569',
+                border: rightPanel === 'tree' ? 'none' : '1px solid #E2E8F0',
+                boxShadow: rightPanel === 'tree' ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
+              }}
+            >
+              🧠 Tree
               {treeNodeCount > 0 && (
-                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold
-                  ${showTree ? 'bg-white/20' : 'bg-indigo-100 text-indigo-600'}`}>
+                <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold"
+                  style={{
+                    background: rightPanel === 'tree' ? 'rgba(255,255,255,0.2)' : '#EEF2FF',
+                    color: rightPanel === 'tree' ? '#fff' : '#6366F1',
+                  }}>
                   {treeNodeCount}
                 </span>
               )}
@@ -289,11 +367,10 @@ export default function Home() {
               <>
                 <button
                   onClick={() => store.setShowQuiz(true)}
-                  className="px-4 py-2 text-xs font-medium bg-white border border-slate-200
-                    text-slate-600 rounded-xl hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50
-                    transition-all shadow-sm"
+                  className="px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
+                  style={{ background: '#F3F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
                 >
-                  Quiz
+                  🧪 Quiz
                 </button>
                 <button
                   onClick={async () => {
@@ -306,27 +383,35 @@ export default function Home() {
                       store.setShowReport(true);
                     } catch { }
                   }}
-                  className="px-4 py-2 text-xs font-medium bg-white border border-slate-200
-                    text-slate-600 rounded-xl hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50
-                    transition-all shadow-sm"
+                  className="px-3 py-1.5 text-xs font-medium rounded-xl transition-all"
+                  style={{ background: '#F3F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
                 >
-                  Report
+                  📊 Report
                 </button>
               </>
             )}
           </div>
         </header>
 
-        {/* Chat content area */}
+        {/* Content */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Chat messages */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
+          {/* Chat */}
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#FAFBFD' }}>
             <div className="flex-1 overflow-hidden">
-              <AnswerPanel />
+              <AnswerPanel onConceptClick={handleConceptClick} />
             </div>
 
-            {/* Input area — Premium Design */}
-            <div className="shrink-0 border-t border-slate-200/80 bg-white p-4">
+            {/* Error bar */}
+            {store.error && (
+              <div className="mx-4 mb-2 px-4 py-2 rounded-xl text-xs font-medium animate-slide-up"
+                style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>
+                ⚠️ {store.error}
+                <button onClick={() => store.setError(null)} className="ml-2 font-bold">×</button>
+              </div>
+            )}
+
+            {/* Input bar */}
+            <div className="shrink-0 p-4" style={{ background: '#FFFFFF', borderTop: '1px solid #E2E8F0' }}>
               <div className="max-w-3xl mx-auto">
                 <form onSubmit={handleSubmit}>
                   <input
@@ -336,20 +421,20 @@ export default function Home() {
                     onChange={handleFileUpload}
                     className="hidden"
                   />
-                  <div className="flex items-center gap-3 bg-white border-2 border-slate-200
-                    rounded-2xl px-4 py-2 focus-within:border-indigo-400 focus-within:shadow-lg
-                    focus-within:shadow-indigo-500/10 transition-all">
-                    {/* File upload button */}
+                  <div className="flex items-center gap-2 rounded-2xl px-3 py-1.5 transition-all"
+                    style={{ background: '#FFFFFF', border: '2px solid #E2E8F0' }}>
+                    {/* File upload */}
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={store.isLoading || isUploading}
-                      className="p-2 rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-indigo-50
-                        disabled:opacity-30 transition-all"
-                      title="Upload file (PDF, image, text)"
+                      className="p-2 rounded-xl transition-all disabled:opacity-30"
+                      style={{ color: '#94A3B8' }}
+                      title="Upload file"
                     >
                       {isUploading ? (
-                        <div className="w-5 h-5 border-2 border-slate-300 border-t-indigo-500 rounded-full animate-spin" />
+                        <div className="w-5 h-5 border-2 rounded-full animate-spin"
+                          style={{ borderColor: '#E2E8F0', borderTopColor: '#6366F1' }} />
                       ) : (
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -357,10 +442,11 @@ export default function Home() {
                         </svg>
                       )}
                     </button>
-                    <VoiceInput
-                      onTranscript={(text) => setQueryInput(text)}
-                      disabled={store.isLoading}
-                    />
+
+                    {/* Voice input */}
+                    <VoiceInput onTranscript={(text) => setQueryInput(text)} disabled={store.isLoading} />
+
+                    {/* Text input */}
                     <input
                       type="text"
                       value={queryInput}
@@ -370,17 +456,19 @@ export default function Home() {
                         : 'Continue exploring or ask something new...'
                       }
                       disabled={store.isLoading}
-                      className="flex-1 px-2 py-2 bg-transparent text-[15px] text-slate-800
-                        placeholder-slate-400 focus:outline-none disabled:opacity-50"
+                      className="flex-1 px-2 py-2 bg-transparent text-sm focus:outline-none disabled:opacity-50"
+                      style={{ color: '#0F172A' }}
                     />
+
+                    {/* Submit */}
                     <button
                       type="submit"
                       disabled={store.isLoading || !queryInput.trim()}
-                      className="p-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500
-                        text-white shadow-lg shadow-indigo-500/30
-                        hover:shadow-xl hover:shadow-indigo-500/40 hover:scale-105
-                        disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100
-                        disabled:shadow-none transition-all"
+                      className="p-2.5 rounded-xl text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                      style={{
+                        background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                        boxShadow: '0 2px 10px rgba(99,102,241,0.3)',
+                      }}
                     >
                       {store.isLoading ? (
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -392,44 +480,39 @@ export default function Home() {
                       )}
                     </button>
                   </div>
+
                   {/* Uploaded file pill */}
                   {uploadedFile && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl
-                        bg-indigo-50 border border-indigo-200 text-sm text-indigo-600 font-medium">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        {uploadedFile.name}
-                        <button
-                          onClick={() => setUploadedFile(null)}
-                          className="ml-1 text-slate-400 hover:text-red-500 transition-colors"
-                        >
-                          ×
-                        </button>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium"
+                        style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', color: '#6366F1' }}>
+                        📎 {uploadedFile.name}
+                        <button onClick={() => setUploadedFile(null)} style={{ color: '#94A3B8' }}>×</button>
                       </div>
                     </div>
                   )}
                 </form>
-                <p className="text-center text-xs text-slate-400 mt-3">
-                  Click <span className="text-indigo-500 font-medium">highlighted concepts</span> in answers to explore deeper
+                <p className="text-center text-[11px] mt-2.5" style={{ color: '#94A3B8' }}>
+                  Click <span style={{ color: '#6366F1', fontWeight: 600 }}>highlighted concepts</span> in answers to explore deeper •
+                  <span style={{ color: '#6366F1', fontWeight: 600 }}> ★ Must-learn</span> concepts are critical
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Knowledge tree panel (toggleable) - LARGER */}
-          {showTree && (
-            <div className="w-[450px] shrink-0 border-l border-slate-200 overflow-hidden bg-white
-              animate-slide-in-right shadow-xl">
-              <KnowledgeTree />
+          {/* ─── Right Panel (Tree or Pipeline) ─── */}
+          {rightPanel !== 'none' && (
+            <div
+              className="w-[480px] shrink-0 overflow-hidden animate-slide-up"
+              style={{ borderLeft: '1px solid #E2E8F0', background: '#FFFFFF' }}
+            >
+              {rightPanel === 'tree' ? <KnowledgeTree /> : <PipelineView />}
             </div>
           )}
         </div>
       </div>
 
-      {/* Modals */}
+      {/* ─── Modals ─── */}
       <QuizModal />
       <ReportView />
       <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} />

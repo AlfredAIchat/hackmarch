@@ -1,6 +1,7 @@
 """
 Concept Validator — Pure Python logic (no LLM call).
-Deduplicates, filters cycles, assigns colors, caps at 6.
+Deduplicates, filters cycles, assigns importance tier + color, caps at 4.
+Passes through must_learn + why_important from extractor.
 """
 
 from backend.state import AlfredState
@@ -37,16 +38,28 @@ def concept_validator_node(state: AlfredState) -> dict:
         else:
             color = "orange"
 
+        # Difficulty tier labels
+        difficulty = int(c.get("difficulty", 2))
+        if difficulty == 1:
+            tier = "foundation"
+        elif difficulty == 2:
+            tier = "intermediate"
+        else:
+            tier = "advanced"
+
         filtered.append({
             "term": term,
             "relevance_score": score,
-            "difficulty": int(c.get("difficulty", 2)),
+            "difficulty": difficulty,
+            "tier": tier,
             "color": color,
             "explanation": c.get("explanation", ""),
+            "must_learn": bool(c.get("must_learn", score >= 0.8)),
+            "why_important": c.get("why_important", ""),
         })
 
-    # Sort by relevance descending, cap at 6
+    # Sort by relevance descending, cap at 4
     filtered.sort(key=lambda x: x["relevance_score"], reverse=True)
-    filtered = filtered[:6]
+    filtered = filtered[:4]
 
     return {"concepts": filtered}

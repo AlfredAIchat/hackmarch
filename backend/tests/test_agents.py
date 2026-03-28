@@ -106,7 +106,7 @@ class TestConceptValidator:
         assert colors["gradient descent"] == "yellow"  # 0.4 <= score < 0.7
         assert colors["cost function"] == "orange"     # score < 0.4
 
-    def test_cap_at_six(self):
+    def test_cap_at_four(self):
         from backend.agents.concept_validator import concept_validator_node
         concepts = [
             {"term": f"concept-{i:02d}-term", "relevance_score": 0.9 - i * 0.05, "difficulty": 2, "explanation": "..."}
@@ -114,7 +114,39 @@ class TestConceptValidator:
         ]
         state = {"concepts": concepts, "explored_terms": []}
         result = concept_validator_node(state)
-        assert len(result["concepts"]) <= 6
+        assert len(result["concepts"]) <= 4
+
+    def test_must_learn_passthrough(self):
+        from backend.agents.concept_validator import concept_validator_node
+        state = {
+            "concepts": [
+                {"term": "backpropagation", "relevance_score": 0.9, "difficulty": 3,
+                 "must_learn": True, "why_important": "Critical for understanding neural networks"},
+            ],
+            "explored_terms": [],
+        }
+        result = concept_validator_node(state)
+        assert len(result["concepts"]) == 1
+        c = result["concepts"][0]
+        assert c["must_learn"] is True
+        assert c["why_important"] == "Critical for understanding neural networks"
+        assert c["tier"] == "advanced"
+
+    def test_tier_assignment(self):
+        from backend.agents.concept_validator import concept_validator_node
+        state = {
+            "concepts": [
+                {"term": "basic term", "relevance_score": 0.8, "difficulty": 1, "explanation": "..."},
+                {"term": "medium term", "relevance_score": 0.7, "difficulty": 2, "explanation": "..."},
+                {"term": "hard concept", "relevance_score": 0.6, "difficulty": 3, "explanation": "..."},
+            ],
+            "explored_terms": [],
+        }
+        result = concept_validator_node(state)
+        tiers = {c["term"]: c["tier"] for c in result["concepts"]}
+        assert tiers["basic term"] == "foundation"
+        assert tiers["medium term"] == "intermediate"
+        assert tiers["hard concept"] == "advanced"
 
 
 # ──────────────────────────────────────────────

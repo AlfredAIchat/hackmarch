@@ -34,63 +34,78 @@ export default function LoginPage() {
     if (!mounted) return null;
 
     return (
-        <div className="min-h-screen bg-[#0a0a14] flex items-center justify-center p-4">
-            {/* Background effects */}
+        <div className="min-h-screen flex items-center justify-center p-4"
+            style={{ background: 'linear-gradient(135deg, #FAFBFD 0%, #EEF2FF 50%, #F5F3FF 100%)' }}>
+            {/* Background elements */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
-                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl" />
+                <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] rounded-full blur-3xl"
+                    style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.06), transparent)' }} />
+                <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full blur-3xl"
+                    style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.06), transparent)' }} />
             </div>
 
             <div className="relative w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl
-            bg-gradient-to-br from-cyan-500 to-purple-600 shadow-2xl shadow-cyan-500/20 mb-4">
-                        <span className="text-2xl font-black text-white">R</span>
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+                        style={{
+                            background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                            boxShadow: '0 8px 24px rgba(99, 102, 241, 0.3)',
+                        }}>
+                        <span className="text-2xl font-black text-white">A</span>
                     </div>
                     <h1 className="text-3xl font-bold mb-2">
-                        <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                        <span style={{
+                            background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                        }}>
                             Alfred AI
                         </span>
                     </h1>
-                    <p className="text-gray-500 text-sm">
+                    <p className="text-sm" style={{ color: '#94A3B8' }}>
                         Recursive Understanding Engine
                     </p>
                 </div>
 
                 {/* Login card */}
-                <div className="bg-[#0d0d1a] border border-gray-800 rounded-2xl p-8 shadow-2xl">
-                    <h2 className="text-xl font-semibold text-gray-200 mb-1">Welcome back</h2>
-                    <p className="text-gray-500 text-sm mb-6">
+                <div className="glass-card-elevated p-8">
+                    <h2 className="text-xl font-bold mb-1" style={{ color: '#0F172A' }}>Welcome</h2>
+                    <p className="text-sm mb-6" style={{ color: '#94A3B8' }}>
                         Enter your name to access your learning history
                     </p>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
+                            <label className="block text-xs font-bold uppercase tracking-wider mb-2"
+                                style={{ color: '#94A3B8' }}>
                                 Your Name
                             </label>
                             <input
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                placeholder="e.g. Shakira"
+                                placeholder="e.g. Alex"
                                 autoFocus
-                                className="w-full px-4 py-3 bg-gray-900/80 border border-gray-700 rounded-xl
-                  text-gray-200 placeholder-gray-600 text-sm
-                  focus:outline-none focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20
-                  transition-all duration-200"
+                                className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all duration-200"
+                                style={{
+                                    background: '#F3F5F9',
+                                    border: '2px solid #E2E8F0',
+                                    color: '#0F172A',
+                                }}
                             />
                         </div>
 
                         <button
                             type="submit"
                             disabled={!name.trim() || isLoading}
-                            className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600
-                text-white font-semibold rounded-xl text-sm
-                hover:shadow-lg hover:shadow-cyan-500/25
-                disabled:opacity-50 disabled:cursor-not-allowed
-                transition-all duration-200 active:scale-[0.98]"
+                            className="w-full py-3 text-white font-bold rounded-xl text-sm
+                                disabled:opacity-50 disabled:cursor-not-allowed
+                                transition-all duration-200 active:scale-[0.98]"
+                            style={{
+                                background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
+                            }}
                         >
                             {isLoading ? (
                                 <div className="flex items-center justify-center gap-2">
@@ -103,25 +118,28 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    <div className="mt-6 pt-6 border-t border-gray-800">
+                    <div className="mt-6 pt-6" style={{ borderTop: '1px solid #E2E8F0' }}>
                         <div className="grid grid-cols-3 gap-3 text-center">
                             <div>
-                                <div className="text-cyan-400 font-bold text-lg">∞</div>
-                                <div className="text-gray-600 text-[10px] uppercase tracking-wider">Depth</div>
+                                <div className="text-lg font-bold" style={{ color: '#6366F1' }}>∞</div>
+                                <div className="text-[10px] uppercase tracking-wider font-semibold"
+                                    style={{ color: '#94A3B8' }}>Depth</div>
                             </div>
                             <div>
-                                <div className="text-purple-400 font-bold text-lg">11</div>
-                                <div className="text-gray-600 text-[10px] uppercase tracking-wider">Agents</div>
+                                <div className="text-lg font-bold" style={{ color: '#8B5CF6' }}>11</div>
+                                <div className="text-[10px] uppercase tracking-wider font-semibold"
+                                    style={{ color: '#94A3B8' }}>Agents</div>
                             </div>
                             <div>
-                                <div className="text-pink-400 font-bold text-lg">AI</div>
-                                <div className="text-gray-600 text-[10px] uppercase tracking-wider">Powered</div>
+                                <div className="text-lg font-bold" style={{ color: '#10B981' }}>AI</div>
+                                <div className="text-[10px] uppercase tracking-wider font-semibold"
+                                    style={{ color: '#94A3B8' }}>Powered</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <p className="text-center text-gray-700 text-xs mt-6">
+                <p className="text-center text-xs mt-6" style={{ color: '#94A3B8' }}>
                     Your data stays in your browser. No account needed.
                 </p>
             </div>

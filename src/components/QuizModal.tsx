@@ -5,239 +5,194 @@ import { useSessionStore } from '@/store/sessionStore';
 
 export default function QuizModal() {
     const {
+        quizQuestions,
         showQuiz,
         setShowQuiz,
-        quizQuestions,
+        submitQuiz,
         quizScore,
-        quizResults,
-        sessionId,
-        setQuizQuestions,
-        setQuizScore,
-        setQuizResults,
-        conversationMessages,
+        isStreaming,
     } = useSessionStore();
 
-    const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
-    const [currentQ, setCurrentQ] = useState(0);
+    const [answers, setAnswers] = useState<number[]>([]);
     const [submitted, setSubmitted] = useState(false);
-    const [isLoadingQuiz, setIsLoadingQuiz] = useState(false);
-    const [flipped, setFlipped] = useState<Record<number, boolean>>({});
-    const [errorMessage, setErrorMessage] = useState<string>('');
 
-    if (!showQuiz) return null;
+    if (!showQuiz || !quizQuestions?.length) return null;
 
-    // Check if user has enough context for a meaningful quiz
-    const hasEnoughContext = conversationMessages.length >= 3;
-
-    const loadQuiz = async () => {
-        setIsLoadingQuiz(true);
-        setErrorMessage('');
-        try {
-            const resp = await fetch('/api/quiz', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: sessionId }),
-            });
-            const data = await resp.json();
-
-            if (data.error) {
-                setErrorMessage(data.error);
-            } else if (!data.quiz_questions || data.quiz_questions.length === 0) {
-                setErrorMessage('Not enough context yet. Explore more concepts by clicking on terms in answers to generate a quiz.');
-            } else {
-                setQuizQuestions(data.quiz_questions || []);
-                setCurrentQ(0);
-                setSelectedAnswers({});
-                setSubmitted(false);
-                setFlipped({});
-            }
-        } catch (err) {
-            console.error(err);
-            setErrorMessage('Failed to generate quiz. Please try again.');
-        } finally {
-            setIsLoadingQuiz(false);
-        }
+    const handleSelect = (qIdx: number, optIdx: number) => {
+        if (submitted) return;
+        const next = [...answers];
+        next[qIdx] = optIdx;
+        setAnswers(next);
     };
 
-    const submitQuiz = async () => {
-        const answers = quizQuestions.map((_, i) => selectedAnswers[i] ?? -1);
-        setErrorMessage('');
-        try {
-            const resp = await fetch('/api/quiz', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: sessionId, answers }),
-            });
-            const data = await resp.json();
-
-            if (data.error) {
-                setErrorMessage(data.error);
-            } else {
-                setQuizScore(data.quiz_score ?? 0);
-                setQuizResults(data.results || []);
-                setSubmitted(true);
-            }
-        } catch (err) {
-            console.error(err);
-            setErrorMessage('Failed to submit quiz. Please try again.');
-        }
+    const handleSubmit = async () => {
+        if (answers.length < quizQuestions.length) return;
+        await submitQuiz(answers);
+        setSubmitted(true);
     };
 
-    const q = quizQuestions[currentQ];
+    const handleClose = () => {
+        setShowQuiz(false);
+        setSubmitted(false);
+        setAnswers([]);
+    };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className="w-full max-w-lg mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            <div
+                className="w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col animate-slide-up"
+                style={{
+                    background: 'rgba(255, 255, 255, 0.97)',
+                    backdropFilter: 'blur(20px)',
+                    borderRadius: '20px',
+                    border: '1px solid #E2E8F0',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)',
+                }}
+            >
                 {/* Header */}
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-white">Knowledge Quiz</h2>
+                <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: '#E2E8F0' }}>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
+                            style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}>
+                            🧪
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold" style={{ color: '#0F172A' }}>Knowledge Check</h2>
+                            <p className="text-xs" style={{ color: '#94A3B8' }}>
+                                Test your understanding of explored concepts
+                            </p>
+                        </div>
+                    </div>
                     <button
-                        onClick={() => setShowQuiz(false)}
-                        className="text-gray-400 hover:text-white transition-colors text-2xl"
+                        onClick={handleClose}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                        style={{ color: '#94A3B8', background: '#F3F5F9' }}
                     >
                         ×
                     </button>
                 </div>
 
-                {/* No questions loaded yet */}
-                {quizQuestions.length === 0 && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center space-y-4">
-                        <p className="text-gray-400 mb-4">
-                            Generate a quiz based on the concepts you've explored.
+                {/* Score Banner */}
+                {submitted && quizScore !== null && (
+                    <div
+                        className="mx-6 mt-4 p-4 rounded-xl text-center"
+                        style={{
+                            background: quizScore >= 70
+                                ? 'linear-gradient(135deg, #ECFDF5, #D1FAE5)'
+                                : 'linear-gradient(135deg, #FFFBEB, #FEF3C7)',
+                            border: `1px solid ${quizScore >= 70 ? '#A7F3D0' : '#FCD34D'}`,
+                        }}
+                    >
+                        <div className="text-3xl font-black" style={{ color: quizScore >= 70 ? '#059669' : '#D97706' }}>
+                            {Math.round(quizScore)}%
+                        </div>
+                        <p className="text-sm font-semibold mt-1" style={{ color: quizScore >= 70 ? '#065F46' : '#92400E' }}>
+                            {quizScore >= 90 ? '🏆 Outstanding!' : quizScore >= 70 ? '✅ Great job!' : '📚 Keep exploring!'}
                         </p>
-
-                        {/* Error message */}
-                        {errorMessage && (
-                            <div className="px-4 py-3 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 text-sm">
-                                {errorMessage}
-                            </div>
-                        )}
-
-                        {/* Warning for insufficient context */}
-                        {!hasEnoughContext && !errorMessage && (
-                            <div className="px-4 py-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-xs">
-                                💡 Tip: Ask a few questions and explore concepts first for a better quiz experience.
-                            </div>
-                        )}
-
-                        <button
-                            onClick={loadQuiz}
-                            disabled={isLoadingQuiz}
-                            className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600
-                text-white rounded-xl font-semibold hover:shadow-lg
-                hover:shadow-cyan-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isLoadingQuiz ? 'Generating…' : 'Generate Quiz'}
-                        </button>
                     </div>
                 )}
 
-                {/* Question card */}
-                {q && !submitted && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-                        {/* Progress */}
-                        <div className="px-6 pt-4 flex items-center justify-between">
-                            <span className="text-xs text-gray-500">
-                                Question {currentQ + 1} of {quizQuestions.length}
-                            </span>
-                            <span className="text-xs text-cyan-400">{q.concept}</span>
-                        </div>
-
-                        <div className="p-6">
-                            <p className="text-gray-200 font-medium mb-4">{q.question}</p>
-
-                            <div className="space-y-2">
-                                {q.options.map((opt, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() =>
-                                            setSelectedAnswers((prev) => ({ ...prev, [currentQ]: i }))
-                                        }
-                                        className={`w-full text-left px-4 py-3 rounded-xl border transition-all text-sm
-                      ${selectedAnswers[currentQ] === i
-                                                ? 'border-cyan-500 bg-cyan-500/10 text-cyan-300'
-                                                : 'border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600'
-                                            }`}
-                                    >
-                                        <span className="font-mono text-xs text-gray-500 mr-2">
-                                            {String.fromCharCode(65 + i)}.
-                                        </span>
-                                        {opt}
-                                    </button>
-                                ))}
+                {/* Questions */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {quizQuestions.map((q: any, qIdx: number) => (
+                        <div key={qIdx} className="glass-card p-5">
+                            <div className="flex items-start gap-3 mb-4">
+                                <span
+                                    className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold text-white"
+                                    style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+                                >
+                                    {qIdx + 1}
+                                </span>
+                                <p className="text-sm font-semibold leading-relaxed" style={{ color: '#0F172A' }}>
+                                    {q.question}
+                                </p>
                             </div>
-                        </div>
 
-                        {/* Nav */}
-                        <div className="px-6 pb-4 flex justify-between">
-                            <button
-                                onClick={() => setCurrentQ((p) => Math.max(0, p - 1))}
-                                disabled={currentQ === 0}
-                                className="px-4 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
-                            >
-                                ← Previous
-                            </button>
-                            {currentQ < quizQuestions.length - 1 ? (
-                                <button
-                                    onClick={() => setCurrentQ((p) => p + 1)}
-                                    className="px-4 py-2 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
-                                >
-                                    Next →
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={submitQuiz}
-                                    disabled={Object.keys(selectedAnswers).length < quizQuestions.length}
-                                    className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-purple-600
-                    text-white rounded-lg text-sm font-semibold
-                    disabled:opacity-50 hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
-                                >
-                                    Submit
-                                </button>
+                            <div className="space-y-2 ml-10">
+                                {q.options.map((opt: string, oIdx: number) => {
+                                    const isSelected = answers[qIdx] === oIdx;
+                                    const isCorrect = submitted && oIdx === q.correct_index;
+                                    const isWrong = submitted && isSelected && oIdx !== q.correct_index;
+
+                                    let bg = '#F3F5F9';
+                                    let borderC = '#E2E8F0';
+                                    let textC = '#0F172A';
+
+                                    if (isCorrect) {
+                                        bg = '#ECFDF5';
+                                        borderC = '#A7F3D0';
+                                        textC = '#065F46';
+                                    } else if (isWrong) {
+                                        bg = '#FEF2F2';
+                                        borderC = '#FECACA';
+                                        textC = '#991B1B';
+                                    } else if (isSelected) {
+                                        bg = '#EEF2FF';
+                                        borderC = '#A5B4FC';
+                                        textC = '#4338CA';
+                                    }
+
+                                    return (
+                                        <button
+                                            key={oIdx}
+                                            onClick={() => handleSelect(qIdx, oIdx)}
+                                            className="w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all"
+                                            style={{ background: bg, border: `1.5px solid ${borderC}`, color: textC }}
+                                        >
+                                            <span className="inline-flex items-center gap-2">
+                                                <span className="w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold"
+                                                    style={{
+                                                        background: isSelected ? borderC : '#E2E8F0',
+                                                        color: isSelected ? textC : '#94A3B8',
+                                                    }}>
+                                                    {String.fromCharCode(65 + oIdx)}
+                                                </span>
+                                                {opt}
+                                                {isCorrect && ' ✓'}
+                                                {isWrong && ' ✗'}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Concept tag */}
+                            {q.concept && (
+                                <div className="mt-3 ml-10">
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                                        style={{ background: '#EEF2FF', color: '#6366F1', border: '1px solid #C7D2FE' }}>
+                                        {q.concept}
+                                    </span>
+                                </div>
                             )}
                         </div>
-                    </div>
-                )}
+                    ))}
+                </div>
 
-                {/* Results */}
-                {submitted && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-4">
-                        <div className="text-center">
-                            <div className="text-5xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent mb-1">
-                                {quizScore?.toFixed(0)}%
-                            </div>
-                            <p className="text-gray-400 text-sm">Quiz Score</p>
-                        </div>
-
-                        {quizQuestions.map((q, i) => {
-                            const result = quizResults[i];
-                            const isCorrect = result?.is_correct;
-                            return (
-                                <div
-                                    key={i}
-                                    className={`p-4 rounded-xl border ${isCorrect
-                                            ? 'border-green-500/30 bg-green-500/5'
-                                            : 'border-red-500/30 bg-red-500/5'
-                                        }`}
-                                >
-                                    <p className="text-sm text-gray-300 mb-1">{q.question}</p>
-                                    <p className="text-xs text-gray-500">
-                                        {isCorrect ? '✓ Correct' : '✗ Incorrect'} —{' '}
-                                        {result?.explanation || ''}
-                                    </p>
-                                </div>
-                            );
-                        })}
-
+                {/* Footer */}
+                <div className="p-6 border-t" style={{ borderColor: '#E2E8F0' }}>
+                    {!submitted ? (
                         <button
-                            onClick={() => setShowQuiz(false)}
-                            className="w-full px-4 py-3 bg-gray-800 text-gray-300 rounded-xl
-                hover:bg-gray-700 transition-colors text-sm"
+                            onClick={handleSubmit}
+                            disabled={answers.length < quizQuestions.length || isStreaming}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
+                            style={{
+                                background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
+                            }}
+                        >
+                            Submit Answers
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleClose}
+                            className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
+                            style={{ background: '#F3F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
                         >
                             Close
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

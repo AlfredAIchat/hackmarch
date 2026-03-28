@@ -1,21 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Alfred AI — Recursive Understanding Engine",
-  description:
-    "Alfred AI: Your intelligent learning companion. A multi-agent AI pipeline that turns any question into a live knowledge tree.",
+  title: "Alfred AI — Recursive Learning Engine",
+  description: "An 11-agent AI pipeline that enables infinite-depth recursive learning through knowledge exploration.",
 };
 
 export default function RootLayout({
@@ -24,11 +12,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="h-full overflow-hidden bg-[#0a0a14]">{children}</body>
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+      </head>
+      <body className="antialiased">
+        {children}
+      </body>
     </html>
   );
 }

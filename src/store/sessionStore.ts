@@ -6,8 +6,11 @@ export interface ConceptItem {
   term: string;
   relevance_score: number;
   difficulty: number;
+  tier?: string;
   color: 'green' | 'yellow' | 'orange';
-  explanation: string;
+  explanation?: string;
+  must_learn?: boolean;
+  why_important?: string;
 }
 
 export interface PipelineNode {
@@ -47,6 +50,7 @@ interface SessionState {
   // Session
   sessionId: string;
   isLoading: boolean;
+  isStreaming: boolean;
   error: string | null;
 
   // Conversation (full history displayed as chat)
@@ -55,6 +59,9 @@ interface SessionState {
 
   // Latest concepts (for the most recent answer)
   latestConcepts: ConceptItem[];
+
+  // Explored terms (all terms the user has clicked)
+  exploredTerms: string[];
 
   // Pipeline
   pipelineNodes: PipelineNode[];
@@ -84,11 +91,13 @@ interface SessionState {
   // Actions
   setSessionId: (id: string) => void;
   setLoading: (loading: boolean) => void;
+  setStreaming: (streaming: boolean) => void;
   setError: (error: string | null) => void;
   setCurrentDepth: (depth: number) => void;
   addUserMessage: (text: string) => void;
   addAssistantMessage: (content: string, concepts: ConceptItem[], depth: number) => void;
   addConceptsToLastMessage: (concepts: ConceptItem[]) => void;
+  addExploredTerm: (term: string) => void;
   updatePipelineNode: (nodeId: string, status: PipelineNode['status']) => void;
   resetPipelineNodes: () => void;
   updateTree: (tree: Record<string, any>) => void;
@@ -97,6 +106,7 @@ interface SessionState {
   setQuizScore: (score: number) => void;
   setQuizResults: (results: any[]) => void;
   setShowQuiz: (show: boolean) => void;
+  submitQuiz: (answers: number[]) => Promise<void>;
   setReport: (report: string) => void;
   setShowReport: (show: boolean) => void;
   setDifficultyLevel: (level: number) => void;
@@ -198,10 +208,12 @@ function buildTreeFromRaw(raw: Record<string, any>): TreeNode | null {
 export const useSessionStore = create<SessionState>((set, get) => ({
   sessionId: '',
   isLoading: false,
+  isStreaming: false,
   error: null,
   conversationMessages: [],
   currentDepth: 0,
   latestConcepts: [],
+  exploredTerms: [],
   pipelineNodes: [...DEFAULT_PIPELINE_NODES],
   treeData: null,
   rawTree: {},
@@ -220,6 +232,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   setSessionId: (id) => set({ sessionId: id }),
   setLoading: (loading) => set({ isLoading: loading }),
+  setStreaming: (streaming) => set({ isStreaming: streaming }),
   setError: (error) => set({ error }),
   setCurrentDepth: (depth) => set({ currentDepth: depth }),
 
@@ -247,7 +260,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
         msgs[lastIdx] = { ...msgs[lastIdx], concepts };
       }
-      return { conversationMessages: msgs };
+      return { conversationMessages: msgs, latestConcepts: concepts };
+    }),
+
+  addExploredTerm: (term: string) =>
+    set((state) => {
+      const lower = term.toLowerCase();
+      if (state.exploredTerms.some(t => t.toLowerCase() === lower)) {
+        return state; // Already explored — no-op (prevents duplication)
+      }
+      return { exploredTerms: [...state.exploredTerms, term] };
     }),
 
   updatePipelineNode: (nodeId, status) =>
@@ -278,6 +300,29 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   setQuizScore: (score) => set({ quizScore: score }),
   setQuizResults: (results) => set({ quizResults: results }),
   setShowQuiz: (show) => set({ showQuiz: show }),
+
+  submitQuiz: async (answers: number[]) => {
+    const state = get();
+    if (!state.sessionId) return;
+    try {
+      const resp = await fetch(
+        `${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000') : 'http://localhost:8000'}/session/submit-quiz`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: state.sessionId, answers }),
+        }
+      );
+      const data = await resp.json();
+      set({
+        quizScore: data.quiz_score ?? 0,
+        quizResults: data.results ?? [],
+      });
+    } catch (err) {
+      console.error('Quiz submit error:', err);
+    }
+  },
+
   setReport: (report) => set({ report }),
   setShowReport: (show) => set({ showReport: show }),
 
@@ -289,10 +334,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({
       sessionId: '',
       isLoading: false,
+      isStreaming: false,
       error: null,
       conversationMessages: [],
       currentDepth: 0,
       latestConcepts: [],
+      exploredTerms: [],
       pipelineNodes: [...DEFAULT_PIPELINE_NODES],
       treeData: null,
       rawTree: {},

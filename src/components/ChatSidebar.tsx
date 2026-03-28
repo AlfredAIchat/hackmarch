@@ -1,166 +1,148 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
-import { useUserStore, SavedSession } from '@/store/userStore';
+import { useUserStore } from '@/store/userStore';
 
-export default function ChatSidebar() {
-    const { profile, savedSessions, logout, saveConversationData, loadConversationData, saveSessionToHistory } = useUserStore();
-    const sessionStore = useSessionStore();
-
-    const handleNewChat = () => {
-        // Save current session if it has content
-        if (sessionStore.sessionId && sessionStore.conversationMessages.length > 0) {
-            const firstMsg = sessionStore.conversationMessages.find((m) => m.role === 'user');
-            const saved: SavedSession = {
-                id: sessionStore.sessionId,
-                title: firstMsg?.content.slice(0, 50) || 'Untitled',
-                createdAt: sessionStore.timeline[0]?.timestamp || Date.now(),
-                lastUpdatedAt: Date.now(),
-                depth: sessionStore.currentDepth,
-                nodesExplored: Object.keys(sessionStore.rawTree).length,
-                quizScore: sessionStore.quizScore,
-            };
-            saveSessionToHistory(saved);
-            saveConversationData(sessionStore.sessionId);
-        }
-        sessionStore.resetSession();
-    };
-
-    const handleOpenSession = (session: SavedSession) => {
-        // Save current session first
-        if (sessionStore.sessionId && sessionStore.conversationMessages.length > 0) {
-            const firstMsg = sessionStore.conversationMessages.find((m) => m.role === 'user');
-            const saved: SavedSession = {
-                id: sessionStore.sessionId,
-                title: firstMsg?.content.slice(0, 50) || 'Untitled',
-                createdAt: sessionStore.timeline[0]?.timestamp || Date.now(),
-                lastUpdatedAt: Date.now(),
-                depth: sessionStore.currentDepth,
-                nodesExplored: Object.keys(sessionStore.rawTree).length,
-                quizScore: sessionStore.quizScore,
-            };
-            saveSessionToHistory(saved);
-            saveConversationData(sessionStore.sessionId);
-        }
-
-        // Load the clicked session
-        const loaded = loadConversationData(session.id);
-        if (!loaded) {
-            // No saved conversation data — just set session ID
-            sessionStore.resetSession();
-            sessionStore.setSessionId(session.id);
-        }
-    };
+/* ─────── Progress Ring (inline SVG) ─────── */
+function ProgressRing({ value, max, size = 48, strokeWidth = 4 }: {
+    value: number; max: number; size?: number; strokeWidth?: number;
+}) {
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const percent = max > 0 ? Math.min(value / max, 1) : 0;
+    const offset = circumference * (1 - percent);
 
     return (
-        <div className="w-full h-full flex flex-col bg-[#0a0a14]">
-            {/* New Chat Button */}
-            <div className="p-3 shrink-0">
-                <button
-                    onClick={handleNewChat}
-                    className="w-full flex items-center gap-2 px-3 py-2.5
-            bg-gray-800/50 border border-gray-700/80 rounded-xl
-            text-gray-300 text-sm font-medium
-            hover:bg-gray-700/50 hover:border-gray-600
-            transition-all duration-200 group"
-                >
-                    <svg className="w-4 h-4 text-gray-500 group-hover:text-cyan-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    New conversation
-                </button>
+        <svg width={size} height={size} className="progress-ring">
+            <circle
+                cx={size / 2} cy={size / 2} r={radius}
+                fill="none" stroke="#E2E8F0" strokeWidth={strokeWidth}
+            />
+            <circle
+                cx={size / 2} cy={size / 2} r={radius}
+                fill="none"
+                stroke="url(#sidebarProgressGrad)"
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={offset}
+            />
+            <defs>
+                <linearGradient id="sidebarProgressGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#6366F1" />
+                    <stop offset="100%" stopColor="#8B5CF6" />
+                </linearGradient>
+            </defs>
+            <text
+                x="50%" y="50%" textAnchor="middle" dy="4"
+                style={{ fontSize: '12px', fontWeight: 800, fill: '#0F172A', fontFamily: 'Inter' }}
+            >
+                {Math.round(percent * 100)}%
+            </text>
+        </svg>
+    );
+}
+
+/* ─────── Main Component (inline panel, not modal) ─────── */
+export default function ChatSidebar() {
+    const {
+        exploredTerms,
+        currentDepth,
+        conversationMessages,
+    } = useSessionStore();
+    const { profile, savedSessions, isLoggedIn } = useUserStore();
+
+    const totalConceptsEncountered = useMemo(() => {
+        let count = 0;
+        conversationMessages.forEach((m: any) => {
+            if (m.concepts) count += m.concepts.length;
+        });
+        return Math.max(count, 1);
+    }, [conversationMessages]);
+
+    return (
+        <div className="h-full flex flex-col overflow-y-auto" style={{ background: '#FFFFFF' }}>
+            {/* Header */}
+            <div className="p-4 border-b" style={{ borderColor: '#E2E8F0' }}>
+                <div className="flex items-center gap-3">
+                    <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white"
+                        style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+                    >
+                        {isLoggedIn && profile ? profile.displayName.charAt(0).toUpperCase() : 'A'}
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold" style={{ color: '#0F172A' }}>
+                            {isLoggedIn && profile ? profile.displayName : 'Alfred AI'}
+                        </p>
+                        <p className="text-[11px]" style={{ color: '#94A3B8' }}>
+                            {isLoggedIn && profile ? `${profile.totalSessions} sessions` : 'Learning Engine'}
+                        </p>
+                    </div>
+                </div>
             </div>
 
-            {/* Session list */}
-            <div className="flex-1 overflow-y-auto px-2">
-                {savedSessions.length === 0 ? (
-                    <div className="px-3 py-8 text-center">
-                        <p className="text-gray-600 text-xs">No previous conversations</p>
+            {/* Session Stats */}
+            <div className="p-4">
+                <h3 className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: '#94A3B8' }}>
+                    Session
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                    {/* Progress Ring */}
+                    <div className="rounded-xl p-3 flex flex-col items-center" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                        <ProgressRing value={exploredTerms.length} max={totalConceptsEncountered} />
+                        <p className="text-[10px] font-semibold mt-1.5" style={{ color: '#94A3B8' }}>Explored</p>
                     </div>
-                ) : (
-                    <div className="space-y-0.5">
-                        <div className="px-3 py-2">
-                            <span className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest">
-                                Recent
-                            </span>
-                        </div>
-                        {savedSessions.slice(0, 20).map((session) => {
-                            const isActive = sessionStore.sessionId === session.id;
-                            return (
-                                <button
-                                    key={session.id}
-                                    onClick={() => handleOpenSession(session)}
-                                    className={`w-full text-left px-3 py-2 rounded-lg
-                      text-sm truncate transition-all duration-150
-                      ${isActive
-                                            ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-300'
-                                            : 'text-gray-400 hover:bg-gray-800/60 hover:text-gray-200 border border-transparent'
-                                        }`}
-                                >
-                                    <div className="truncate text-[13px]">{session.title}</div>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-[10px] text-gray-600">
-                                            depth {session.depth}
-                                        </span>
-                                        <span className="text-[10px] text-gray-700">·</span>
-                                        <span className="text-[10px] text-gray-600">
-                                            {session.nodesExplored} concepts
-                                        </span>
-                                        {session.quizScore !== null && (
-                                            <>
-                                                <span className="text-[10px] text-gray-700">·</span>
-                                                <span className="text-[10px] text-cyan-600">
-                                                    {Math.round(session.quizScore)}%
-                                                </span>
-                                            </>
-                                        )}
-                                    </div>
-                                </button>
-                            );
-                        })}
+                    {/* Depth */}
+                    <div className="rounded-xl p-3 flex flex-col items-center justify-center" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                        <div className="text-2xl font-black" style={{ color: '#6366F1' }}>{currentDepth}</div>
+                        <p className="text-[10px] font-semibold" style={{ color: '#94A3B8' }}>Depth</p>
                     </div>
-                )}
+                </div>
             </div>
 
-            {/* User profile footer */}
-            {profile && (
-                <div className="shrink-0 p-3 border-t border-gray-800/60">
-                    {/* Stats row */}
-                    <div className="grid grid-cols-3 gap-1 mb-3">
-                        <div className="text-center p-1.5 rounded-lg bg-gray-900/50">
-                            <div className="text-cyan-400 font-bold text-sm">{profile.totalSessions}</div>
-                            <div className="text-gray-600 text-[9px] uppercase">Sessions</div>
-                        </div>
-                        <div className="text-center p-1.5 rounded-lg bg-gray-900/50">
-                            <div className="text-purple-400 font-bold text-sm">{profile.totalConcepts}</div>
-                            <div className="text-gray-600 text-[9px] uppercase">Learned</div>
-                        </div>
-                        <div className="text-center p-1.5 rounded-lg bg-gray-900/50">
-                            <div className="text-pink-400 font-bold text-sm">
-                                {profile.avgQuizScore > 0 ? `${Math.round(profile.avgQuizScore)}%` : '—'}
-                            </div>
-                            <div className="text-gray-600 text-[9px] uppercase">Score</div>
-                        </div>
-                    </div>
-
-                    {/* User info + logout */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-purple-600
-                flex items-center justify-center text-[11px] font-bold text-white">
-                                {profile.displayName.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-gray-400 text-xs truncate max-w-[100px]">
-                                {profile.displayName}
+            {/* Explored Concepts */}
+            {exploredTerms.length > 0 && (
+                <div className="px-4 pb-3">
+                    <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#94A3B8' }}>
+                        Explored ({exploredTerms.length})
+                    </h3>
+                    <div className="flex flex-wrap gap-1.5">
+                        {exploredTerms.map((term, i) => (
+                            <span
+                                key={i}
+                                className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                                style={{ background: '#F3F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
+                            >
+                                ✓ {term}
                             </span>
-                        </div>
-                        <button
-                            onClick={logout}
-                            className="text-gray-600 hover:text-gray-400 text-xs transition-colors"
-                        >
-                            Log out
-                        </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Past Sessions */}
+            {savedSessions.length > 0 && (
+                <div className="px-4 pb-3 flex-1">
+                    <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#94A3B8' }}>
+                        History
+                    </h3>
+                    <div className="space-y-1.5">
+                        {savedSessions.slice(0, 5).map((s) => (
+                            <div
+                                key={s.id}
+                                className="px-3 py-2 rounded-lg"
+                                style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}
+                            >
+                                <p className="text-[11px] font-semibold truncate" style={{ color: '#0F172A' }}>
+                                    {s.title}
+                                </p>
+                                <p className="text-[9px] mt-0.5" style={{ color: '#94A3B8' }}>
+                                    Depth {s.depth} • {s.nodesExplored} concepts
+                                </p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
