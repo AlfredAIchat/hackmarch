@@ -1,143 +1,191 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import ReactFlow, {
-    Background,
-    type Node,
-    type Edge,
-    Position,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
-import { useSessionStore } from '@/store/sessionStore';
 
-/* ─────── Pipeline Node Data ─────── */
-const PIPELINE_NODES = [
-    { id: 'intent', label: 'Intent Guard', icon: '🛡️', desc: 'Validates query' },
-    { id: 'context', label: 'Context Builder', icon: '🧩', desc: 'Builds context chain' },
-    { id: 'answer', label: 'Answer Agent', icon: '🤖', desc: 'Generates response' },
-    { id: 'hallucination', label: 'Hallucination Check', icon: '🔍', desc: 'Fact verification' },
-    { id: 'extractor', label: 'Concept Extractor', icon: '💎', desc: 'Extracts key terms' },
-    { id: 'validator', label: 'Concept Validator', icon: '✅', desc: 'Scores & filters' },
-    { id: 'user_gate', label: 'User Gate', icon: '🌳', desc: 'Updates tree' },
-    { id: 'depth', label: 'Depth Guard', icon: '📏', desc: 'Tracks depth' },
-];
-
-/* ─────── Custom Node Component ─────── */
-function PipelineNode({ data }: { data: any }) {
-    const isActive = data.isActive;
-    const isComplete = data.isComplete;
-
-    const bgColor = isActive
-        ? 'linear-gradient(135deg, #6366F1, #8B5CF6)'
-        : isComplete
-            ? 'linear-gradient(135deg, #10B981, #059669)'
-            : '#FFFFFF';
-    const textColor = isActive || isComplete ? '#FFFFFF' : '#0F172A';
-    const borderColor = isActive ? '#6366F1' : isComplete ? '#10B981' : '#E2E8F0';
-
-    return (
-        <div
-            className={`px-4 py-3 rounded-xl text-center transition-all duration-300 ${isActive ? 'node-glow' : ''}`}
-            style={{
-                background: bgColor,
-                border: `2px solid ${borderColor}`,
-                boxShadow: isActive
-                    ? '0 0 20px rgba(99, 102, 241, 0.3)'
-                    : isComplete
-                        ? '0 0 12px rgba(16, 185, 129, 0.2)'
-                        : '0 2px 8px rgba(0, 0, 0, 0.04)',
-                minWidth: 150,
-            }}
-        >
-            <div className="text-lg mb-0.5">{data.icon}</div>
-            <div className="text-xs font-bold" style={{ color: textColor }}>
-                {data.label}
-            </div>
-            <div className="text-[9px] mt-0.5 font-medium" style={{ color: isActive || isComplete ? '#ffffffaa' : '#94A3B8' }}>
-                {data.desc}
-            </div>
-        </div>
-    );
+/* ─────── Types ─────── */
+export interface PipelineStep {
+    id: string;
+    label: string;
+    status: 'idle' | 'active' | 'done' | 'error';
+    detail?: string;
+    duration?: number;
 }
 
-const nodeTypes = { pipeline: PipelineNode };
+interface Props {
+    steps: PipelineStep[];
+    className?: string;
+}
 
-export default function PipelineView() {
-    const { pipelineNodes } = useSessionStore();
+/* ─────── Icons ─────── */
+const ICONS: Record<string, string> = {
+    'intent_guard': '🛡️',
+    'context_builder': '📚',
+    'answer_agent': '🧠',
+    'hallucination_checker': '🔍',
+    'concept_extractor': '💡',
+    'concept_validator': '✅',
+    'tree_builder': '🌳',
+    'difficulty_adapter': '⚙️',
+    'deduplicator': '🧹',
+    'relevance_scorer': '📊',
+    'quiz_generator': '📝',
+};
 
-    const { nodes, edges } = useMemo(() => {
-        const cols = 4;
-        const xGap = 200;
-        const yGap = 120;
-        const startX = 40;
-        const startY = 30;
+const STATUS_COLORS = {
+    idle: { bg: '#F8FAFC', border: '#E2E8F0', text: '#94A3B8', dot: '#CBD5E1' },
+    active: { bg: '#EEF2FF', border: '#6366F1', text: '#4338CA', dot: '#6366F1' },
+    done: { bg: '#ECFDF5', border: '#10B981', text: '#065F46', dot: '#10B981' },
+    error: { bg: '#FEF2F2', border: '#EF4444', text: '#991B1B', dot: '#EF4444' },
+};
 
-        const flowNodes: Node[] = PIPELINE_NODES.map((n, i) => {
-            const pNode = pipelineNodes.find(
-                (p: any) => p.id === n.id || p.label?.toLowerCase().includes(n.id)
-            );
-            return {
-                id: n.id,
-                type: 'pipeline',
-                position: {
-                    x: startX + (i % cols) * xGap,
-                    y: startY + Math.floor(i / cols) * yGap,
-                },
-                data: {
-                    ...n,
-                    isActive: pNode?.status === 'active',
-                    isComplete: pNode?.status === 'complete',
-                },
-                sourcePosition: Position.Right,
-                targetPosition: Position.Left,
-            };
-        });
+export default function PipelineView({ steps, className }: Props) {
+    const progress = useMemo(() => {
+        if (steps.length === 0) return 0;
+        const done = steps.filter(s => s.status === 'done').length;
+        const active = steps.filter(s => s.status === 'active').length;
+        return Math.round(((done + active * 0.5) / steps.length) * 100);
+    }, [steps]);
 
-        const flowEdges: Edge[] = PIPELINE_NODES.slice(0, -1).map((n, i) => ({
-            id: `e-${n.id}-${PIPELINE_NODES[i + 1].id}`,
-            source: n.id,
-            target: PIPELINE_NODES[i + 1].id,
-            animated: true,
-            style: { stroke: '#CBD5E1', strokeWidth: 2 },
-        }));
+    const activeStep = steps.find(s => s.status === 'active');
+    const isComplete = steps.length > 0 && steps.every(s => s.status === 'done');
+    const hasError = steps.some(s => s.status === 'error');
 
-        return { nodes: flowNodes, edges: flowEdges };
-    }, [pipelineNodes]);
+    if (steps.length === 0) {
+        return (
+            <div className={`flex flex-col items-center justify-center h-full gap-4 ${className}`}>
+                <div className="empty-illustration">
+                    <svg width="100" height="100" viewBox="0 0 100 100" fill="none">
+                        {/* Pipeline illustration */}
+                        <rect x="35" y="10" width="30" height="16" rx="4" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1.5" />
+                        <rect x="35" y="34" width="30" height="16" rx="4" fill="#F8FAFC" stroke="#E2E8F0" strokeWidth="1.5" />
+                        <rect x="35" y="58" width="30" height="16" rx="4" fill="#F8FAFC" stroke="#E2E8F0" strokeWidth="1.5" />
+                        <rect x="35" y="82" width="30" height="16" rx="4" fill="#F8FAFC" stroke="#E2E8F0" strokeWidth="1.5" strokeDasharray="3 3" />
+                        <line x1="50" y1="26" x2="50" y2="34" stroke="#CBD5E1" strokeWidth="1.5" />
+                        <line x1="50" y1="50" x2="50" y2="58" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="3 3" />
+                        <line x1="50" y1="74" x2="50" y2="82" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="3 3" />
+                    </svg>
+                </div>
+                <div className="text-center">
+                    <p className="text-sm font-semibold" style={{ color: '#475569' }}>Agent Pipeline</p>
+                    <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>11—agent pipeline awaiting input</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="tree-container h-full" style={{ minHeight: 320 }}>
+        <div className={`flex flex-col h-full ${className}`}>
             {/* Header */}
-            <div className="absolute top-3 left-4 z-10">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-                    style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid #E2E8F0' }}>
-                    <span className="text-sm">⚡</span>
-                    <span className="text-xs font-bold" style={{ color: '#0F172A' }}>
-                        Agent Pipeline
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #E2E8F0' }}>
+                <div className="flex items-center gap-2">
+                    {isComplete ? (
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: '#ECFDF5' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>
+                        </div>
+                    ) : hasError ? (
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: '#FEF2F2' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                        </div>
+                    ) : (
+                        <div className="pulse-dot" />
+                    )}
+                    <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#64748B' }}>
+                        {isComplete ? 'Complete' : hasError ? 'Error' : activeStep ? activeStep.label : 'Processing'}
                     </span>
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                        style={{ background: '#ECFDF5', color: '#059669' }}>
-                        {PIPELINE_NODES.length} agents
-                    </span>
+                </div>
+                <span className="text-xs font-bold" style={{ color: '#6366F1' }}>{progress}%</span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="px-4 pt-3">
+                <div className="progress-bar" style={{ height: '5px' }}>
+                    <div className="progress-bar-fill" style={{
+                        width: `${progress}%`,
+                        background: isComplete ? '#10B981' : hasError ? '#EF4444' : undefined,
+                    }} />
                 </div>
             </div>
 
-            <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                fitView
-                fitViewOptions={{ padding: 0.3 }}
-                nodesDraggable={false}
-                nodesConnectable={false}
-                elementsSelectable={false}
-                panOnDrag={false}
-                zoomOnScroll={false}
-                zoomOnPinch={false}
-                zoomOnDoubleClick={false}
-                proOptions={{ hideAttribution: true }}
-            >
-                <Background color="#E2E8F0" gap={24} size={1} />
-            </ReactFlow>
+            {/* Steps list */}
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+                <div className="relative">
+                    {/* Connecting line */}
+                    <div className="absolute left-[15px] top-0 bottom-0 w-[2px]" style={{
+                        background: `linear-gradient(180deg, ${isComplete ? '#10B981' : '#6366F1'} 0%, #E2E8F0 100%)`,
+                    }} />
+
+                    {steps.map((step, i) => {
+                        const colors = STATUS_COLORS[step.status];
+                        const icon = Object.entries(ICONS).find(([k]) => step.id.includes(k))?.[1] || '●';
+
+                        return (
+                            <div key={step.id}
+                                className="relative flex items-start gap-3 animate-slide-up"
+                                style={{
+                                    marginBottom: i < steps.length - 1 ? '12px' : 0,
+                                    animationDelay: `${i * 60}ms`,
+                                    animationFillMode: 'both',
+                                }}
+                            >
+                                {/* Node dot */}
+                                <div className="relative z-10 flex-shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center text-xs"
+                                    style={{
+                                        background: colors.bg,
+                                        border: `2px solid ${colors.border}`,
+                                        boxShadow: step.status === 'active' ? `0 0 0 4px rgba(99,102,241,0.12)` : undefined,
+                                    }}
+                                >
+                                    {step.status === 'active' ? (
+                                        <div className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#6366F1', borderTopColor: 'transparent' }} />
+                                    ) : step.status === 'done' ? (
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>
+                                    ) : step.status === 'error' ? (
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                                    ) : (
+                                        <div className="w-2 h-2 rounded-full" style={{ background: '#CBD5E1' }} />
+                                    )}
+                                </div>
+
+                                {/* Step content */}
+                                <div className="flex-1 min-w-0 py-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm" style={{ opacity: step.status === 'idle' ? 0.5 : 1 }}>
+                                            {icon}
+                                        </span>
+                                        <span className="text-xs font-semibold truncate" style={{ color: colors.text }}>
+                                            {step.label}
+                                        </span>
+                                        {step.duration != null && step.status === 'done' && (
+                                            <span className="text-[10px] font-mono ml-auto flex-shrink-0" style={{ color: '#94A3B8' }}>
+                                                {(step.duration / 1000).toFixed(1)}s
+                                            </span>
+                                        )}
+                                    </div>
+                                    {step.detail && step.status !== 'idle' && (
+                                        <p className="text-[11px] mt-0.5 leading-relaxed truncate" style={{ color: '#94A3B8' }}>
+                                            {step.detail}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Footer summary */}
+            {isComplete && (
+                <div className="px-4 py-3 animate-slide-up" style={{ borderTop: '1px solid #E2E8F0' }}>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold" style={{ color: '#10B981' }}>
+                            ✓ All {steps.length} agents completed
+                        </span>
+                        <span className="text-[10px] font-mono" style={{ color: '#94A3B8' }}>
+                            {(steps.reduce((acc, s) => acc + (s.duration || 0), 0) / 1000).toFixed(1)}s total
+                        </span>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

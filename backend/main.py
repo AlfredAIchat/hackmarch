@@ -57,6 +57,9 @@ class StartRequest(BaseModel):
 class SelectTermRequest(BaseModel):
     session_id: str
     selected_term: str
+    difficulty_level: int = 5
+    technicality_level: int = 5
+    answer_depth: str = "moderate"
 
 
 class QuizSubmitRequest(BaseModel):
@@ -321,6 +324,10 @@ async def select_term(req: SelectTermRequest):
     state["selected_term"] = req.selected_term
     state["user_query"] = req.selected_term
     state["current_depth"] = state.get("current_depth", 0) + 1
+    # Forward user preferences
+    state["difficulty_level"] = max(1, min(10, req.difficulty_level))
+    state["technicality_level"] = max(1, min(10, req.technicality_level))
+    state["answer_depth"] = req.answer_depth if req.answer_depth in ["brief", "moderate", "detailed"] else "moderate"
     session_id = req.session_id
 
     async def event_stream():
