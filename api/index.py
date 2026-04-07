@@ -1,16 +1,18 @@
 """
-Vercel serverless function handler for FastAPI.
-Routes all requests to the FastAPI application.
+Vercel Python entry point for FastAPI backend.
 """
 import sys
 import os
 
-# Ensure backend module can be imported
+# Add project root to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import FastAPI app
 from backend.main import app
 
-# For Vercel serverless
-handler = app
+# Expose as ASGI application for Vercel
+asgi_app = app
+
+
 
 

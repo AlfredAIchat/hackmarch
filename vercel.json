@@ -1,5 +1,16 @@
 {
-  "buildCommand": "npm install && pip install -r backend/requirements.txt && npm run build",
-  "outputDirectory": ".next",
-  "installCommand": "npm install"
+  "experimentalServices": {
+    "frontend": {
+      "routePrefix": "/",
+      "buildCommand": "npm install && npm run build",
+      "outputDirectory": ".next",
+      "framework": "nextjs"
+    },
+    "backend": {
+      "routePrefix": "/_/backend",
+      "entrypoint": "api/index.py",
+      "runtime": "python3.12",
+      "buildCommand": "pip install -r backend/requirements.txt"
+    }
+  }
 }

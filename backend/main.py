@@ -36,7 +36,9 @@ from backend.llm import chat
 app = FastAPI(title="Alfred AI Pipeline API", version="1.0.0")
 
 # Get allowed origins from environment or use defaults
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+# Handle comma-separated origins and strip whitespace
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
 app.add_middleware(
     CORSMiddleware,
