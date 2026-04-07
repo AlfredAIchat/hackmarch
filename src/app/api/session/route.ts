@@ -5,7 +5,13 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const resp = await fetch(`${BACKEND_URL}/session/start`, {
+        
+        // For Vercel deployment, use relative path; for dev use full URL
+        const backendEndpoint = BACKEND_URL.startsWith('http') 
+            ? `${BACKEND_URL}/session/start`
+            : `${req.nextUrl.origin}${BACKEND_URL}/session/start`;
+        
+        const resp = await fetch(backendEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -28,6 +34,16 @@ export async function POST(req: NextRequest) {
             headers: {
                 'Content-Type': 'text/event-stream',
                 'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            },
+        });
+    } catch (error: any) {
+        return NextResponse.json(
+            { error: error.message || 'Session failed' },
+            { status: 500 }
+        );
+    }
+}
                 Connection: 'keep-alive',
             },
         });

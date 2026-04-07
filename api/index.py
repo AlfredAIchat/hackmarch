@@ -1,25 +1,16 @@
 """
-Vercel serverless function entry point for FastAPI backend.
-This file enables the backend to work with Vercel's runtime.
+Vercel serverless function handler for FastAPI.
+Routes all requests to the FastAPI application.
 """
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import sys
 import os
 
-# Import your main FastAPI app
-from backend.main import app as alfred_app
+# Ensure backend module can be imported
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Get the environment
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+from backend.main import app
 
-# Update CORS for Vercel deployment
-alfred_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[FRONTEND_URL, "http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# For Vercel serverless
+handler = app
 
-# Export for Vercel
-app = alfred_app
+

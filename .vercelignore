@@ -1,0 +1,14 @@
+.git
+.gitignore
+node_modules
+.next
+frontend/node_modules
+backend/__pycache__
+backend/*.pyc
+.env
+.env.local
+.DS_Store
+.vscode
+.idea
+*.md
+!README.md
