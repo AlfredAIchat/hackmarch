@@ -87,6 +87,7 @@ export default function SettingsPanel({ settings, onUpdate, onClose }: Props) {
                             value={settings.difficulty}
                             onChange={e => update({ difficulty: +e.target.value })}
                             className="premium-slider"
+                            style={{ backgroundSize: `${((settings.difficulty - 1) / 4) * 100}% 100%` }}
                         />
                         <div className="flex justify-between mt-1.5">
                             {DIFFICULTY_LABELS.map((l, i) => (
@@ -118,6 +119,7 @@ export default function SettingsPanel({ settings, onUpdate, onClose }: Props) {
                             value={settings.technicality}
                             onChange={e => update({ technicality: +e.target.value })}
                             className="premium-slider"
+                            style={{ backgroundSize: `${((settings.technicality - 1) / 4) * 100}% 100%` }}
                         />
                         <div className="flex justify-between mt-1.5">
                             {TECH_LABELS.map((l, i) => (

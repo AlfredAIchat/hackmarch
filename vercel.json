@@ -1,8 +1,16 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
-  "installCommand": "npm install",
+  "experimentalServices": {
+    "frontend": {
+      "routePrefix": "/",
+      "framework": "nextjs"
+    },
+    "backend": {
+      "entrypoint": "backend/main.py",
+      "routePrefix": "/_/backend"
+    }
+  },
   "env": {
-    "BACKEND_URL": "@backend_url"
+    "ALLOWED_ORIGINS": "@allowed_origins",
+    "OPENAI_API_KEY": "@openai_api_key"
   }
 }

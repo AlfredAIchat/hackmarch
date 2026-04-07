@@ -123,6 +123,7 @@ interface SessionState {
     setDifficultyLevel: (l: number) => void;
     setTechnicalityLevel: (l: number) => void;
     setAnswerDepth: (d: 'brief' | 'moderate' | 'detailed') => void;
+    patchLastAssistantConcepts: (concepts: ConceptItem[]) => void;
     resetSession: () => void;
 }
 
@@ -206,8 +207,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     report: null,
     showReport: false,
     timeline: [],
-    difficultyLevel: 5,
-    technicalityLevel: 5,
+    difficultyLevel: 3,
+    technicalityLevel: 3,
     answerDepth: 'moderate',
 
     // Actions
@@ -298,6 +299,33 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     setDifficultyLevel: (l) => set({ difficultyLevel: l }),
     setTechnicalityLevel: (l) => set({ technicalityLevel: l }),
     setAnswerDepth: (d) => set({ answerDepth: d }),
+
+    patchLastAssistantConcepts: (concepts) => {
+        const state = get();
+        const msgs = state.conversationMessages;
+        const lastIdx = msgs.map(m => m.role).lastIndexOf('assistant');
+        if (lastIdx === -1) {
+            // No assistant message yet — just store as latestConcepts
+            set({ latestConcepts: concepts });
+            return;
+        }
+        const seenTerms = new Set(state.allSeenConceptTerms);
+        const dedupedConcepts = concepts.filter((c) => {
+            const lower = c.term.toLowerCase().trim();
+            if (seenTerms.has(lower)) return false;
+            if (state.exploredTerms.some(t => t.toLowerCase() === lower)) return false;
+            seenTerms.add(lower);
+            return true;
+        });
+        const updated = msgs.map((m, i) =>
+            i === lastIdx ? { ...m, concepts: dedupedConcepts } : m
+        );
+        set({
+            conversationMessages: updated,
+            latestConcepts: dedupedConcepts,
+            allSeenConceptTerms: seenTerms,
+        });
+    },
 
     resetSession: () => set({
         sessionId: '',

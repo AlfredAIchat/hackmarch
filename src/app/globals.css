@@ -278,6 +278,11 @@ html, body {
   border-color: var(--pill-green-border);
   color: #065F46;
 }
+.concept-pill--blue {
+  background: #EFF6FF;
+  border-color: #BFDBFE;
+  color: #3B82F6;
+}
 .concept-pill--yellow {
   background: var(--pill-yellow-bg);
   border-color: var(--pill-yellow-border);
@@ -306,6 +311,8 @@ html, body {
   height: 6px;
   border-radius: var(--radius-full);
   background: var(--bg-tertiary);
+  background-image: var(--brand-gradient);
+  background-repeat: no-repeat;
   outline: none;
   transition: background var(--duration-fast);
 }

@@ -43,6 +43,7 @@ function pillClass(color: string, mustLearn?: boolean) {
     if (mustLearn) return 'concept-pill concept-pill--must-learn';
     if (color === 'green') return 'concept-pill concept-pill--green';
     if (color === 'yellow') return 'concept-pill concept-pill--yellow';
+    if (color === 'blue') return 'concept-pill concept-pill--blue';
     return 'concept-pill concept-pill--orange';
 }
 
@@ -90,9 +91,27 @@ export default function HomePage() {
     /* ─────── SSE Event Handler ─────── */
     const handleSSE: SSEEventHandler = useCallback((event: string, data: any) => {
         switch (event) {
+            // ── Session lifecycle ──
             case 'session_started':
                 if (data.session_id) store.setSessionId(data.session_id);
                 break;
+
+            // ── Pipeline node status (backend canonical events) ──
+            case 'node_activated': {
+                const node = data.node as string;
+                const status = data.status as string;
+                if (!node) break;
+                if (status === 'active') {
+                    store.setPipelineNodeStatus(node, 'running');
+                } else if (status === 'complete') {
+                    store.setPipelineNodeStatus(node, 'done');
+                } else if (status === 'error') {
+                    store.setPipelineNodeStatus(node, 'error');
+                }
+                break;
+            }
+
+            // ── Legacy / alternative event names (keep for safety) ──
             case 'pipeline_update':
             case 'agent_start':
                 if (data.agent) store.setPipelineNodeStatus(data.agent, 'running');
@@ -104,6 +123,36 @@ export default function HomePage() {
             case 'agent_error':
                 if (data.agent) store.setPipelineNodeStatus(data.agent, 'error');
                 break;
+
+            // ── Answer (backend canonical) ──
+            case 'answer_ready': {
+                const answer = data.answer || '';
+                const depth = data.depth ?? store.currentDepth;
+                if (answer) {
+                    store.addAssistantMessage(answer, [], depth);
+                    if (data.depth != null) store.setCurrentDepth(data.depth);
+                }
+                break;
+            }
+
+            // ── Concepts (backend canonical) ──
+            case 'concepts_ready': {
+                const concepts: ConceptItem[] = (data.concepts || []).map((c: any) => ({
+                    term: c.term || c.name || String(c),
+                    relevance_score: c.relevance_score ?? 0.5,
+                    difficulty: c.difficulty ?? 3,
+                    color: c.color || (c.relevance_score >= 0.8 ? 'orange' : c.relevance_score >= 0.5 ? 'yellow' : 'green'),
+                    must_learn: c.must_learn ?? false,
+                    why_important: c.why_important || '',
+                }));
+                if (concepts.length > 0) {
+                    // Patch concepts onto the last assistant message (don't append a new one)
+                    store.patchLastAssistantConcepts(concepts);
+                }
+                break;
+            }
+
+            // ── Legacy answer formats ──
             case 'answer':
             case 'final_answer': {
                 const answer = data.answer || data.text || (typeof data === 'string' ? data : '');
@@ -116,13 +165,11 @@ export default function HomePage() {
                     why_important: c.why_important || '',
                 }));
                 const depth = data.depth ?? store.currentDepth;
-                if (answer) {
-                    store.addAssistantMessage(answer, concepts, depth);
-                } else if (concepts.length > 0) {
-                    store.setLatestConcepts(concepts);
-                }
+                if (answer) store.addAssistantMessage(answer, concepts, depth);
                 break;
             }
+
+            // ── Legacy concept formats ──
             case 'concepts':
             case 'extracted_concepts': {
                 const concepts: ConceptItem[] = (data.concepts || data || []).map((c: any) => ({
@@ -136,18 +183,32 @@ export default function HomePage() {
                 if (concepts.length > 0) store.setLatestConcepts(concepts);
                 break;
             }
+
+            // ── Tree ──
             case 'tree_update':
             case 'knowledge_tree':
                 if (data.tree || data) store.updateTree(data.tree || data);
                 break;
+
+            // ── Depth ──
             case 'depth_update':
                 if (data.depth != null) store.setCurrentDepth(data.depth);
                 break;
-            case 'error':
-                store.setError(data.message || data.error || 'An error occurred');
+
+            // ── Rejection ──
+            case 'rejected':
+                store.setError(data.reason || 'Query was rejected');
                 break;
+
+            // ── Done / errors ──
+            case 'done':
             case 'complete':
             case 'stream_end':
+                store.setProcessing(false);
+                break;
+
+            case 'error':
+                store.setError(data.message || data.error || 'An error occurred');
                 store.setProcessing(false);
                 break;
         }
@@ -164,20 +225,22 @@ export default function HomePage() {
         store.resetPipeline();
         store.setProcessing(true);
         setRightTab('pipeline');
+        setShowRightPanel(true);
 
         try {
+            // Scale 1-5 slider → 1-10 backend scale
             await startSession({
                 query: q,
                 session_id: store.sessionId || `s_${Date.now()}`,
-                difficulty_level: store.difficultyLevel,
-                technicality_level: store.technicalityLevel,
+                difficulty_level: Math.round(store.difficultyLevel * 2) - 1,
+                technicality_level: Math.round(store.technicalityLevel * 2) - 1,
                 answer_depth: store.answerDepth,
             }, handleSSE);
         } catch (err: any) {
             store.setError(err.message || 'Failed to connect');
         } finally {
             store.setProcessing(false);
-            setTimeout(() => setRightTab('tree'), 500);
+            setTimeout(() => { setRightTab('tree'); setShowRightPanel(true); }, 500);
         }
     }, [query, store, handleSSE]);
 
@@ -189,20 +252,21 @@ export default function HomePage() {
         store.resetPipeline();
         store.setProcessing(true);
         setRightTab('pipeline');
+        setShowRightPanel(true);
 
         try {
             await selectTerm({
                 session_id: store.sessionId,
                 term,
-                difficulty_level: store.difficultyLevel,
-                technicality_level: store.technicalityLevel,
+                difficulty_level: Math.round(store.difficultyLevel * 2) - 1,
+                technicality_level: Math.round(store.technicalityLevel * 2) - 1,
                 answer_depth: store.answerDepth,
             }, handleSSE);
         } catch (err: any) {
             store.setError(err.message || 'Failed to explore concept');
         } finally {
             store.setProcessing(false);
-            setTimeout(() => setRightTab('tree'), 500);
+            setTimeout(() => { setRightTab('tree'); setShowRightPanel(true); }, 500);
         }
     }, [store, handleSSE]);
 
