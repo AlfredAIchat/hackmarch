@@ -71,6 +71,21 @@ def _load_agents():
         print(f"DEBUG: Python path: {sys.path[:3]}", file=sys.stderr)
         print(f"DEBUG: CWD: {os.getcwd()}", file=sys.stderr)
         
+        # DEBUG: Check if backend directory exists
+        backend_check = os.path.join(_project_root, "backend")
+        print(f"DEBUG: Checking for backend at: {backend_check}", file=sys.stderr)
+        print(f"DEBUG: Backend exists: {os.path.isdir(backend_check)}", file=sys.stderr)
+        if os.path.isdir(backend_check):
+            print(f"DEBUG: Backend contents: {os.listdir(backend_check)[:5]}", file=sys.stderr)
+        
+        # Try direct import of backend to verify it's findable
+        try:
+            import backend
+            print(f"DEBUG: Successfully imported backend package from {backend.__file__}", file=sys.stderr)
+        except ImportError as e:
+            print(f"DEBUG: Cannot import backend: {e}", file=sys.stderr)
+            raise
+        
         # Load with individual try/catch for each agent
         agents_to_load = [
             ("intent_guard", "backend.agents.intent_guard", "intent_guard_node"),
@@ -89,15 +104,27 @@ def _load_agents():
         loaded_count = 0
         for name, module_path, exports in agents_to_load:
             try:
+                # Use importlib for more robust importing
+                import importlib
+                print(f"DEBUG: Importing {module_path}...", file=sys.stderr)
+                module = importlib.import_module(module_path)
+                print(f"DEBUG: Successfully imported {module_path}", file=sys.stderr)
+                
                 if isinstance(exports, list):
                     # Multiple exports
-                    module = __import__(module_path, fromlist=exports)
                     for export in exports:
-                        _agents[export] = getattr(module, export)
+                        obj = getattr(module, export, None)
+                        if obj:
+                            _agents[export] = obj
+                        else:
+                            print(f"DEBUG: Warning: {export} not found in {module_path}", file=sys.stderr)
                 else:
                     # Single export
-                    module = __import__(module_path, fromlist=[exports])
-                    _agents[exports] = getattr(module, exports)
+                    obj = getattr(module, exports, None)
+                    if obj:
+                        _agents[exports] = obj
+                    else:
+                        print(f"DEBUG: Warning: {exports} not found in {module_path}", file=sys.stderr)
                 print(f"✓ {name} loaded", file=sys.stderr)
                 loaded_count += 1
             except Exception as e:
