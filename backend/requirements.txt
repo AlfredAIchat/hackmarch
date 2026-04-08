@@ -6,4 +6,5 @@ python-dotenv
 pydantic
 langchain
 langchain-openai
+langgraph
 mistralai
