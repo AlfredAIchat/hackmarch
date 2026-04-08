@@ -49,7 +49,7 @@ export default function LandingPage() {
     if (!mounted) return null;
 
     return (
-        <div className="min-h-screen bg-[linear-gradient(140deg,#f8fafc_0%,#eef5ff_45%,#ecfeff_100%)] text-slate-900 overflow-x-hidden">
+        <div className="min-h-screen bg-[linear-gradient(140deg,#f8fafc_0%,#eef5ff_45%,#ecfeff_100%)] text-slate-900 overflow-x-hidden scroll-smooth">
             <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/80 border-b border-slate-200/70">
                 <div className="max-w-7xl mx-auto h-20 px-5 md:px-8 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -66,11 +66,11 @@ export default function LandingPage() {
                 </div>
             </header>
 
-            <section className="relative py-16 md:py-20 lg:py-24">
+            <section className="relative pt-16 pb-20 md:pt-20 md:pb-24 lg:min-h-[calc(100vh-5rem)] lg:flex lg:items-center lg:py-0">
                 <div className="absolute -top-20 -left-20 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl pointer-events-none" />
                 <div className="absolute top-1/3 -right-16 h-80 w-80 rounded-full bg-teal-200/40 blur-3xl pointer-events-none" />
                 <div className="max-w-7xl mx-auto px-5 md:px-8 relative">
-                    <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-start">
+                    <div className="grid lg:grid-cols-12 gap-12 xl:gap-16 items-center">
                         <div className="lg:col-span-7 xl:pr-8">
                             <motion.div
                                 initial={{ opacity: 0, y: 18 }}
@@ -86,7 +86,7 @@ export default function LandingPage() {
                                 initial={{ opacity: 0, y: 22 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.7, delay: 0.1 }}
-                                className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] tracking-tight"
+                                className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-black leading-[1.03] tracking-tight max-w-3xl"
                             >
                                 Learn hard topics by
                                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500">seeing how concepts connect.</span>
@@ -102,21 +102,21 @@ export default function LandingPage() {
                             </motion.p>
                         </div>
 
-                        <div className="lg:col-span-5">
+                        <div className="lg:col-span-5 mt-4 lg:mt-0">
                             <motion.div
                                 initial={{ opacity: 0, y: 20, scale: 0.98 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 transition={{ duration: 0.6, delay: 0.2 }}
-                                className="w-full max-w-xl mx-auto lg:ml-auto rounded-3xl bg-white border border-slate-200 shadow-[0_24px_60px_-20px_rgba(15,23,42,0.25)] overflow-hidden"
+                                className="w-full max-w-xl mx-auto lg:ml-auto rounded-[2rem] bg-white border border-slate-200 shadow-[0_28px_80px_-24px_rgba(15,23,42,0.24)] overflow-hidden"
                             >
                                 <div className="h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-teal-500" />
-                                <div className="p-7 md:p-9">
+                                <div className="p-7 md:p-9 lg:p-10">
                                     <h2 className="text-2xl md:text-3xl font-black tracking-tight">Start Your Session</h2>
                                     <p className="mt-2 text-sm md:text-base text-slate-600 leading-relaxed">
                                         Create a local profile and begin building your concept map.
                                     </p>
 
-                                    <form onSubmit={handleSubmit} className="mt-7 space-y-5">
+                                    <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                                         <div className="space-y-2">
                                             <label htmlFor="displayName" className="text-xs font-bold tracking-[0.13em] uppercase text-slate-500">
                                                 Display Name
@@ -155,31 +155,34 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            <section id="how-it-works" className="py-20 md:py-24 bg-white border-y border-slate-100">
+            <section id="how-it-works" className="py-24 md:py-28 bg-white border-y border-slate-100 scroll-mt-24">
                 <div className="max-w-7xl mx-auto px-5 md:px-8">
-                    <div className="max-w-3xl">
-                        <h3 className="text-3xl md:text-5xl font-black tracking-tight">How it works</h3>
-                        <p className="mt-5 text-lg text-slate-600 leading-relaxed">
+                    <div className="max-w-3xl mb-14 md:mb-16">
+                        <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500 mb-5">
+                            How it works
+                        </div>
+                        <h3 className="text-3xl md:text-5xl font-black tracking-tight leading-[1.05]">A cleaner path from question to understanding.</h3>
+                        <p className="mt-5 text-lg text-slate-600 leading-relaxed max-w-2xl">
                             Every query moves through a visual-first pipeline that extracts concepts, validates relationships, and returns a map you can actually navigate.
                         </p>
                     </div>
 
-                    <div className="mt-12 grid md:grid-cols-3 gap-6">
-                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-7">
+                    <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
+                        <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-7 md:p-8 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
                             <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mb-5">
                                 <Layers className="w-6 h-6 text-slate-700" />
                             </div>
                             <h4 className="text-xl font-bold">1. Parse the question</h4>
                             <p className="mt-3 text-slate-600">The engine identifies core entities instead of writing generic long-form answers.</p>
                         </div>
-                        <div className="rounded-3xl border border-blue-200 bg-blue-50 p-7">
+                        <div className="rounded-[1.75rem] border border-blue-200 bg-blue-50 p-7 md:p-8 shadow-[0_1px_0_rgba(255,255,255,0.85)_inset]">
                             <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center mb-5">
                                 <Network className="w-6 h-6 text-white" />
                             </div>
                             <h4 className="text-xl font-bold text-blue-900">2. Build a concept graph</h4>
                             <p className="mt-3 text-blue-800">Concepts are mapped into a hierarchy, so the structure behind the topic is instantly visible.</p>
                         </div>
-                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-7">
+                        <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-7 md:p-8 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
                             <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mb-5">
                                 <Focus className="w-6 h-6 text-slate-700" />
                             </div>
@@ -190,11 +193,11 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            <section id="recursive-engine" className="py-20 md:py-24 bg-slate-50">
+            <section id="recursive-engine" className="py-24 md:py-28 bg-slate-50 scroll-mt-24">
                 <div className="max-w-7xl mx-auto px-5 md:px-8 grid lg:grid-cols-2 gap-10 items-center">
                     <div className="rounded-[2rem] border border-slate-200 bg-white p-8 md:p-10 shadow-sm">
                         <h3 className="text-3xl md:text-4xl font-black tracking-tight">Why a Recursive Engine?</h3>
-                        <p className="mt-4 text-slate-600 leading-relaxed text-lg">
+                        <p className="mt-4 text-slate-600 leading-relaxed text-lg max-w-xl">
                             Because understanding is layered. Alfred treats learning like expanding concentric circles, not dumping text.
                         </p>
                         <ul className="mt-8 space-y-5">
@@ -213,7 +216,7 @@ export default function LandingPage() {
                         </ul>
                     </div>
 
-                    <div className="rounded-[2rem] bg-slate-900 border border-slate-800 p-8 md:p-10 text-white">
+                    <div className="rounded-[2rem] bg-slate-900 border border-slate-800 p-8 md:p-10 text-white shadow-[0_24px_70px_-26px_rgba(15,23,42,0.5)]">
                         <h4 className="text-2xl md:text-3xl font-black tracking-tight">System Pipeline</h4>
                         <p className="mt-3 text-slate-300">A specialized agent chain executes every question before rendering the graph.</p>
                         <div className="mt-8 grid sm:grid-cols-2 gap-4">
@@ -238,19 +241,19 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            <section id="technology" className="py-20 md:py-24 bg-white border-y border-slate-100">
+            <section id="technology" className="py-24 md:py-28 bg-white border-y border-slate-100 scroll-mt-24">
                 <div className="max-w-7xl mx-auto px-5 md:px-8 text-center">
                     <h3 className="text-3xl md:text-5xl font-black tracking-tight">Built for serious learners</h3>
                     <p className="mt-4 text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
                         From one question to full mastery, Alfred turns complexity into a navigable map of knowledge.
                     </p>
-                    <div className="mt-10 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-8 md:p-10 max-w-4xl mx-auto">
+                    <div className="mt-12 rounded-[2rem] bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-8 md:p-10 max-w-4xl mx-auto shadow-[0_24px_70px_-26px_rgba(15,23,42,0.55)]">
                         <p className="text-xl md:text-2xl font-bold">Understand faster. Retain longer. Think in systems, not snippets.</p>
                     </div>
                 </div>
             </section>
 
-            <footer className="bg-slate-950 py-12 text-slate-400">
+            <footer className="bg-slate-950 py-14 text-slate-400">
                 <div className="max-w-7xl mx-auto px-5 md:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
                     <p>© {new Date().getFullYear()} Alfred Recursive Learning Engine</p>
                     <p>Designed for clarity and depth.</p>
