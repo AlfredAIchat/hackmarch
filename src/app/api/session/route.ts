@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
+function forwardAuthHeaders(req: NextRequest): HeadersInit {
+    const headers: Record<string, string> = {};
+    const cookie = req.headers.get('cookie');
+    const authorization = req.headers.get('authorization');
+    const bypass = req.headers.get('x-vercel-protection-bypass');
+
+    if (cookie) headers.cookie = cookie;
+    if (authorization) headers.authorization = authorization;
+    if (bypass) headers['x-vercel-protection-bypass'] = bypass;
+
+    return headers;
+}
+
 function resolveBackendBase(req: NextRequest): string {
     if (BACKEND_URL.startsWith('http://') || BACKEND_URL.startsWith('https://')) {
         return BACKEND_URL;
@@ -24,7 +37,10 @@ export async function POST(req: NextRequest) {
         const backendBase = resolveBackendBase(req);
         const resp = await fetch(`${backendBase}/session/start`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...forwardAuthHeaders(req),
+            },
             body: JSON.stringify(body),
         });
 
