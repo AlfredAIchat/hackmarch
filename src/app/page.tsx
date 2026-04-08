@@ -1,494 +1,753 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSessionStore } from '@/store/sessionStore';
+import ReactMarkdown from 'react-markdown';
+import { useSessionStore, ConceptItem } from '@/store/sessionStore';
 import { useUserStore } from '@/store/userStore';
-import AnswerPanel from '@/components/AnswerPanel';
-import ChatSidebar from '@/components/ChatSidebar';
-import VoiceInput from '@/components/VoiceInput';
+import { startSession, selectTerm, SSEEventHandler } from '@/lib/api';
+import KnowledgeTree, { TreeNode } from '@/components/KnowledgeTree';
+import PipelineView, { PipelineStep } from '@/components/PipelineView';
 import QuizModal from '@/components/QuizModal';
-import ReportView from '@/components/ReportView';
 import SettingsPanel from '@/components/SettingsPanel';
+import VoiceInput from '@/components/VoiceInput';
 
-const KnowledgeTree = dynamic(() => import('@/components/KnowledgeTree'), {
-  ssr: false,
-  loading: () => (
-    <div className="h-full flex items-center justify-center text-sm" style={{ color: '#94A3B8' }}>
-      Loading tree…
-    </div>
-  ),
-});
+/* ─────── Tab identifiers ─────── */
+type RightTab = 'tree' | 'pipeline';
 
-const PipelineView = dynamic(() => import('@/components/PipelineView'), {
-  ssr: false,
-  loading: () => (
-    <div className="h-full flex items-center justify-center text-sm" style={{ color: '#94A3B8' }}>
-      Loading pipeline…
-    </div>
-  ),
-});
-
-export default function Home() {
-  const router = useRouter();
-  const store = useSessionStore();
-  const { isLoggedIn, loadFromStorage, profile } = useUserStore();
-  const [queryInput, setQueryInput] = useState('');
-  const [rightPanel, setRightPanel] = useState<'none' | 'tree' | 'pipeline'>('none');
-  const [showSettings, setShowSettings] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mounted, setMounted] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<{ name: string; preview: string } | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const buildRequestPayload = (base: Record<string, any>) => {
-    const isEasy = store.difficultyLevel <= 3;
-    const effectiveDepth: 'brief' | 'moderate' | 'detailed' = isEasy ? 'brief' : store.answerDepth;
-    const effectiveTechnicality = isEasy ? Math.min(store.technicalityLevel, 4) : store.technicalityLevel;
-
+/* ─────── Tree adapter — converts store tree to component tree ─────── */
+function toTreeNode(data: any): TreeNode | null {
+    if (!data) return null;
     return {
-      ...base,
-      difficulty_level: store.difficultyLevel,
-      technicality_level: effectiveTechnicality,
-      answer_depth: effectiveDepth,
-      simplicity: isEasy ? 'simple' : 'default',
+        id: data.name || 'root',
+        label: data.name || 'Root',
+        status: data.must_learn ? 'must-learn' : data.depth === -1 ? 'active' :
+            data.color === 'green' ? 'explored' : 'suggested',
+        relevance: data.relevance_score || 0.5,
+        depth: data.depth ?? 0,
+        children: (data.children || []).map((c: any) => toTreeNode(c)).filter(Boolean) as TreeNode[],
     };
-  };
+}
 
-  useEffect(() => {
-    setMounted(true);
-    loadFromStorage();
-  }, []);
+/* ─────── Pipeline adapter ─────── */
+function toPipelineSteps(nodes: { id: string; label: string; status: string }[]): PipelineStep[] {
+    return nodes.map(n => ({
+        id: n.id,
+        label: n.label,
+        status: n.status === 'running' ? 'active' : n.status as PipelineStep['status'],
+    }));
+}
 
-  useEffect(() => {
-    if (mounted && !isLoggedIn) {
-      router.push('/login');
-    }
-  }, [mounted, isLoggedIn, router]);
+/* ─────── Concept pill styling ─────── */
+function pillClass(color: string, mustLearn?: boolean) {
+    if (mustLearn) return 'concept-pill concept-pill--must-learn';
+    if (color === 'green') return 'concept-pill concept-pill--green';
+    if (color === 'yellow') return 'concept-pill concept-pill--yellow';
+    if (color === 'blue') return 'concept-pill concept-pill--blue';
+    return 'concept-pill concept-pill--orange';
+}
 
-  /* ─────── Concept Click → select-term API ─────── */
-  const handleConceptClick = async (term: string) => {
-    if (store.isLoading) return;
+/* ══════════════════════════════════════════
+   Main Dashboard Page
+   ══════════════════════════════════════════ */
+export default function HomePage() {
+    const router = useRouter();
+    const store = useSessionStore();
+    const userStore = useUserStore();
 
-    // Prevent clicking already-explored terms
-    if (store.exploredTerms.some(t => t.toLowerCase() === term.toLowerCase())) {
-      return;
-    }
+    const [mounted, setMounted] = useState(false);
+    const [query, setQuery] = useState('');
+    const [rightTab, setRightTab] = useState<RightTab>('tree');
+    const [showSettings, setShowSettings] = useState(false);
+    const [showQuiz, setShowQuiz] = useState(false);
+    const [showRightPanel, setShowRightPanel] = useState(false);
+    const chatEndRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-    store.addExploredTerm(term);
-    store.setLoading(true);
-    store.setStreaming(true);
-    store.setError(null);
-    store.addUserMessage(`Tell me about "${term}"`);
-    store.resetPipelineNodes();
-    store.addTimelineEntry({
-      type: 'term',
-      text: term,
-      depth: store.currentDepth + 1,
-      timestamp: Date.now(),
-    });
+    /* Auth guard */
+    useEffect(() => {
+        setMounted(true);
+        userStore.loadFromStorage();
+    }, []);
 
-    try {
-      const resp = await fetch('/api/select-term', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildRequestPayload({
-          session_id: store.sessionId,
-          selected_term: term,
-        })),
-      });
-
-      const reader = resp.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) return;
-
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const evt = JSON.parse(line.slice(6));
-            handleSSEEvent(evt);
-          } catch { }
+    useEffect(() => {
+        if (mounted && !userStore.isLoggedIn) {
+            router.push('/login');
         }
-      }
-    } catch (err: any) {
-      store.setError(err.message);
-    } finally {
-      store.setLoading(false);
-      store.setStreaming(false);
-      const sid = useSessionStore.getState().sessionId;
-      if (sid) useUserStore.getState().saveConversationData(sid);
-    }
-  };
+    }, [mounted, userStore.isLoggedIn, router]);
 
-  /* ─────── SSE Event Handler (shared) ─────── */
-  const handleSSEEvent = (evt: any) => {
-    switch (evt.type) {
-      case 'session_started':
-        store.setSessionId(evt.data.session_id);
-        break;
-      case 'node_activated':
-        store.updatePipelineNode(evt.data.node, evt.data.status);
+    /* Auto-scroll chat */
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [store.conversationMessages]);
+
+    /* Focus input */
+    useEffect(() => {
+        if (!store.isProcessing && mounted) {
+            inputRef.current?.focus();
+        }
+    }, [store.isProcessing, mounted]);
+
+    /* ─────── SSE Event Handler ─────── */
+    const handleSSE: SSEEventHandler = useCallback((event: string, data: any) => {
+        switch (event) {
+            // ── Session lifecycle ──
+            case 'session_started':
+                if (data.session_id) store.setSessionId(data.session_id);
+                break;
+
+            // ── Pipeline node status (backend canonical events) ──
+            case 'node_activated': {
+                const node = data.node as string;
+                const status = data.status as string;
+                if (!node) break;
+                if (status === 'active') {
+                    store.setPipelineNodeStatus(node, 'running');
+                } else if (status === 'complete') {
+                    store.setPipelineNodeStatus(node, 'done');
+                } else if (status === 'error') {
+                    store.setPipelineNodeStatus(node, 'error');
+                }
+                break;
+            }
+
+            // ── Legacy / alternative event names (keep for safety) ──
+            case 'pipeline_update':
+            case 'agent_start':
+                if (data.agent) store.setPipelineNodeStatus(data.agent, 'running');
+                break;
+            case 'agent_done':
+            case 'pipeline_done':
+                if (data.agent) store.setPipelineNodeStatus(data.agent, 'done');
+                break;
+            case 'agent_error':
+                if (data.agent) store.setPipelineNodeStatus(data.agent, 'error');
+                break;
+
+            // ── Answer (backend canonical) ──
+            case 'answer_ready': {
+                const answer = data.answer || '';
+                const depth = data.depth ?? store.currentDepth;
+                if (answer) {
+                    store.addAssistantMessage(answer, [], depth);
+                    if (data.depth != null) store.setCurrentDepth(data.depth);
+                }
+                break;
+            }
+
+            // ── Concepts (backend canonical) ──
+            case 'concepts_ready': {
+                const concepts: ConceptItem[] = (data.concepts || []).map((c: any) => ({
+                    term: c.term || c.name || String(c),
+                    relevance_score: c.relevance_score ?? 0.5,
+                    difficulty: c.difficulty ?? 3,
+                    color: c.color || (c.relevance_score >= 0.8 ? 'orange' : c.relevance_score >= 0.5 ? 'yellow' : 'green'),
+                    must_learn: c.must_learn ?? false,
+                    why_important: c.why_important || '',
+                }));
+                if (concepts.length > 0) {
+                    // Patch concepts onto the last assistant message (don't append a new one)
+                    store.patchLastAssistantConcepts(concepts);
+                }
+                break;
+            }
+
+            // ── Legacy answer formats ──
+            case 'answer':
+            case 'final_answer': {
+                const answer = data.answer || data.text || (typeof data === 'string' ? data : '');
+                const concepts: ConceptItem[] = (data.concepts || data.extracted_concepts || []).map((c: any) => ({
+                    term: c.term || c.name || c,
+                    relevance_score: c.relevance_score || c.relevance || 0.5,
+                    difficulty: c.difficulty || 3,
+                    color: c.color || (c.relevance_score >= 0.8 ? 'orange' : c.relevance_score >= 0.5 ? 'yellow' : 'green'),
+                    must_learn: c.must_learn || false,
+                    why_important: c.why_important || '',
+                }));
+                const depth = data.depth ?? store.currentDepth;
+                if (answer) store.addAssistantMessage(answer, concepts, depth);
+                break;
+            }
+
+            // ── Legacy concept formats ──
+            case 'concepts':
+            case 'extracted_concepts': {
+                const concepts: ConceptItem[] = (data.concepts || data || []).map((c: any) => ({
+                    term: c.term || c.name || c,
+                    relevance_score: c.relevance_score || 0.5,
+                    difficulty: c.difficulty || 3,
+                    color: c.color || 'green',
+                    must_learn: c.must_learn || false,
+                    why_important: c.why_important || '',
+                }));
+                if (concepts.length > 0) store.setLatestConcepts(concepts);
+                break;
+            }
+
+            // ── Tree ──
+            case 'tree_update':
+            case 'knowledge_tree':
+                if (data.tree || data) store.updateTree(data.tree || data);
+                break;
+
+            // ── Depth ──
+            case 'depth_update':
+                if (data.depth != null) store.setCurrentDepth(data.depth);
+                break;
+
+            // ── Rejection ──
+            case 'rejected':
+                store.setError(data.reason || 'Query was rejected');
+                break;
+
+            // ── Done / errors ──
+            case 'done':
+            case 'complete':
+            case 'stream_end':
+                store.setProcessing(false);
+                break;
+
+            case 'error':
+                store.setError(data.message || data.error || 'An error occurred');
+                store.setProcessing(false);
+                break;
+        }
+    }, [store]);
+
+    /* ─────── Submit question ─────── */
+    const handleSubmit = useCallback(async (text?: string) => {
+        const q = (text || query).trim();
+        if (!q || store.isProcessing) return;
+
+        setQuery('');
+        store.setError(null);
+        store.addUserMessage(q);
+        store.resetPipeline();
+        store.setProcessing(true);
+        setRightTab('pipeline');
+        setShowRightPanel(true);
+
         try {
-          localStorage.setItem('alfred_pipeline_state', JSON.stringify({
-            nodes: useSessionStore.getState().pipelineNodes,
-            sessionId: useSessionStore.getState().sessionId,
-            depth: useSessionStore.getState().currentDepth,
-            ts: Date.now(),
-          }));
-        } catch { }
-        break;
-      case 'answer_ready':
-        store.addAssistantMessage(evt.data.answer, [], evt.data.depth ?? 0);
-        break;
-      case 'concepts_ready':
-        store.addConceptsToLastMessage(evt.data.concepts);
-        break;
-      case 'tree_update':
-        store.updateTree(evt.data.tree);
-        break;
-      case 'quiz_ready':
-        store.setQuizQuestions(evt.data.quiz_questions || []);
-        break;
-      case 'rejected':
-        store.setError(evt.data.reason);
-        break;
-      case 'error':
-        store.setError(evt.data.message);
-        break;
-    }
-  };
-
-  /* ─────── Submit Query ─────── */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const query = queryInput.trim();
-    if (!query || store.isLoading) return;
-
-    if (!store.sessionId) {
-      store.resetSession();
-    }
-
-    store.setLoading(true);
-    store.setStreaming(true);
-    store.setError(null);
-    store.addUserMessage(query);
-    store.resetPipelineNodes();
-    try {
-      localStorage.setItem('alfred_pipeline_state', JSON.stringify({ reset: true, ts: Date.now() }));
-    } catch { }
-    store.addTimelineEntry({ type: 'query', text: query, depth: 0, timestamp: Date.now() });
-    setQueryInput('');
-
-    try {
-      const resp = await fetch('/api/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildRequestPayload({
-          query,
-          session_id: store.sessionId || undefined,
-        })),
-      });
-
-      const reader = resp.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) return;
-
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const evt = JSON.parse(line.slice(6));
-            handleSSEEvent(evt);
-          } catch { }
+            // Scale 1-5 slider → 1-10 backend scale
+            await startSession({
+                query: q,
+                session_id: store.sessionId || `s_${Date.now()}`,
+                difficulty_level: Math.round(store.difficultyLevel * 2) - 1,
+                technicality_level: Math.round(store.technicalityLevel * 2) - 1,
+                answer_depth: store.answerDepth,
+            }, handleSSE);
+        } catch (err: any) {
+            store.setError(err.message || 'Failed to connect');
+        } finally {
+            store.setProcessing(false);
+            setTimeout(() => { setRightTab('tree'); setShowRightPanel(true); }, 500);
         }
-      }
-    } catch (err: any) {
-      store.setError(err.message);
-    } finally {
-      store.setLoading(false);
-      store.setStreaming(false);
-      setUploadedFile(null);
-      const sid = useSessionStore.getState().sessionId;
-      if (sid) useUserStore.getState().saveConversationData(sid);
-    }
-  };
+    }, [query, store, handleSSE]);
 
-  /* ─────── File Upload ─────── */
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    /* ─────── Explore concept ─────── */
+    const exploreConcept = useCallback(async (term: string) => {
+        if (store.isProcessing) return;
+        store.addExploredTerm(term);
+        store.addUserMessage(`Explain: ${term}`);
+        store.resetPipeline();
+        store.setProcessing(true);
+        setRightTab('pipeline');
+        setShowRightPanel(true);
 
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (store.sessionId) formData.append('session_id', store.sessionId);
-      formData.append('query', queryInput || `Analyze ${file.name}`);
+        try {
+            await selectTerm({
+                session_id: store.sessionId,
+                term,
+                difficulty_level: Math.round(store.difficultyLevel * 2) - 1,
+                technicality_level: Math.round(store.technicalityLevel * 2) - 1,
+                answer_depth: store.answerDepth,
+            }, handleSSE);
+        } catch (err: any) {
+            store.setError(err.message || 'Failed to explore concept');
+        } finally {
+            store.setProcessing(false);
+            setTimeout(() => { setRightTab('tree'); setShowRightPanel(true); }, 500);
+        }
+    }, [store, handleSSE]);
 
-      const resp = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await resp.json();
+    /* ─────── Logout ─────── */
+    const handleLogout = () => {
+        userStore.logout();
+        store.resetSession();
+        router.push('/login');
+    };
 
-      if (data.session_id) store.setSessionId(data.session_id);
-      setUploadedFile({ name: data.filename || file.name, preview: data.preview || '' });
-    } catch (err) {
-      console.error('Upload error:', err);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
+    /* ─────── Settings update ─────── */
+    const updateSettings = (s: { difficulty: number; technicality: number; answerDepth: 'brief' | 'moderate' | 'detailed' }) => {
+        store.setDifficultyLevel(s.difficulty);
+        store.setTechnicalityLevel(s.technicality);
+        store.setAnswerDepth(s.answerDepth);
+    };
 
-  if (!mounted || !isLoggedIn) return null;
+    if (!mounted) return null;
 
-  const treeNodeCount = Object.keys(store.rawTree).length;
+    const treeNode = toTreeNode(store.treeData);
+    const exploredConcepts = store.exploredTerms;
+    const pipelineSteps = toPipelineSteps(store.pipelineNodes);
 
-  return (
-    <main className="app-shell">
-      <div className="shell-grid" />
+    return (
+        <div style={{
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'linear-gradient(180deg, #FAFBFD 0%, #F5F7FA 100%)',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            overflow: 'hidden',
+        }}>
 
-      {/* ─── Sidebar ─── */}
-      <div
-        className={`shrink-0 transition-all duration-300 overflow-hidden bg-white/90 backdrop-blur ${sidebarOpen ? 'w-64' : 'w-0'}`}
-        style={{ borderRight: sidebarOpen ? '1px solid var(--border-light)' : 'none' }}
-      >
-        <ChatSidebar />
-      </div>
-
-      {/* ─── Main Chat Area ─── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="h-16 flex items-center justify-between px-6 shrink-0 panel-surface">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="btn-ghost px-3 py-2"
-              aria-label="Toggle sidebar"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-              </svg>
-            </button>
-
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-black text-white"
-                style={{ background: 'linear-gradient(135deg, var(--accent-indigo), var(--accent-sky))', boxShadow: 'var(--shadow-glow-indigo)' }}>
-                A
-              </div>
-              <div>
-                <span className="text-sm font-bold block" style={{ color: 'var(--text-primary)' }}>Alfred AI</span>
-                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Recursive Learning Engine</span>
-              </div>
-            </div>
-
-            {store.currentDepth > 0 && (
-              <div className="chip">
-                <span className="text-[11px] font-bold" style={{ color: 'var(--accent-indigo)' }}>
-                  Depth {store.currentDepth}
-                </span>
-                <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border-medium)' }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{
-                      width: `${Math.min((store.currentDepth / 10) * 100, 100)}%`,
-                      background: 'linear-gradient(90deg, var(--accent-indigo), var(--accent-sky))',
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowSettings(true)} className="btn-ghost text-xs">
-              ⚙️ Settings
-            </button>
-
-            <button
-              onClick={() => setRightPanel(rightPanel === 'pipeline' ? 'none' : 'pipeline')}
-              className={`btn-ghost text-xs ${rightPanel === 'pipeline' ? 'bg-gradient-to-r from-[var(--accent-indigo)] to-[var(--accent-sky)] text-white border-none' : ''}`}
-              style={rightPanel === 'pipeline' ? { boxShadow: 'var(--shadow-glow-indigo)' } : {}}
-            >
-              ⚡ Pipeline
-            </button>
-
-            <button
-              onClick={() => setRightPanel(rightPanel === 'tree' ? 'none' : 'tree')}
-              className={`btn-ghost text-xs ${rightPanel === 'tree' ? 'bg-gradient-to-r from-[var(--accent-indigo)] to-[var(--accent-violet)] text-white border-none' : ''}`}
-              style={rightPanel === 'tree' ? { boxShadow: 'var(--shadow-glow-indigo)' } : {}}
-            >
-              🧠 Tree
-              {treeNodeCount > 0 && (
-                <span className="ml-2 px-2 py-0.5 rounded-md text-[10px] font-bold"
-                  style={{
-                    background: rightPanel === 'tree' ? 'rgba(255,255,255,0.2)' : 'var(--bg-tertiary)',
-                    color: rightPanel === 'tree' ? '#fff' : 'var(--accent-indigo)',
-                  }}>
-                  {treeNodeCount}
-                </span>
-              )}
-            </button>
-
-            {store.sessionId && (
-              <>
-                <button onClick={() => store.fetchQuiz()} className="btn-ghost text-xs">
-                  🧪 Quiz
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const resp = await fetch(
-                        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/session/report/${store.sessionId}`
-                      );
-                      const data = await resp.json();
-                      store.setReport(data.report || '');
-                      store.setShowReport(true);
-                    } catch { }
-                  }}
-                  className="btn-ghost text-xs"
-                >
-                  📊 Report
-                </button>
-              </>
-            )}
-          </div>
-        </header>
-
-        {/* Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Chat */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
-            <div className="flex-1 overflow-hidden">
-              <AnswerPanel onConceptClick={handleConceptClick} />
-            </div>
-
-            {/* Error bar */}
-            {store.error && (
-              <div className="mx-4 mb-2 px-4 py-2 rounded-xl text-xs font-medium animate-slide-up"
-                style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>
-                ⚠️ {store.error}
-                <button onClick={() => store.setError(null)} className="ml-2 font-bold">×</button>
-              </div>
-            )}
-
-            {/* Input bar */}
-            <div className="shrink-0 p-4" style={{ background: 'transparent' }}>
-              <div className="max-w-3xl mx-auto">
-                <form onSubmit={handleSubmit}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.png,.jpg,.jpeg,.gif,.webp"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <div className="input-rail">
-                    {/* File upload */}
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={store.isLoading || isUploading}
-                      className="btn-ghost p-2 disabled:opacity-40"
-                      style={{ border: 'none', background: 'transparent', boxShadow: 'none', paddingInline: '10px' }}
-                      title="Upload file"
-                    >
-                      {isUploading ? (
-                        <div className="w-5 h-5 border-2 rounded-full animate-spin"
-                          style={{ borderColor: '#E2E8F0', borderTopColor: '#6366F1' }} />
-                      ) : (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                        </svg>
-                      )}
-                    </button>
-
-                    {/* Voice input */}
-                    <VoiceInput onTranscript={(text) => setQueryInput(text)} disabled={store.isLoading} />
-
-                    {/* Text input */}
-                    <input
-                      type="text"
-                      value={queryInput}
-                      onChange={(e) => setQueryInput(e.target.value)}
-                      placeholder={store.conversationMessages.length === 0
-                        ? 'Ask any question to start learning...'
-                        : 'Continue exploring or ask something new...'
-                      }
-                      disabled={store.isLoading}
-                      className="flex-1 px-2 py-2 bg-transparent text-sm focus:outline-none disabled:opacity-50"
-                      style={{ color: 'var(--text-primary)' }}
-                    />
-
-                    {/* Submit */}
-                    <button
-                      type="submit"
-                      disabled={store.isLoading || !queryInput.trim()}
-                      className="btn-primary px-4 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {store.isLoading ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                            d="M12 19V5m0 0l-7 7m7-7l7 7" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Uploaded file pill */}
-                  {uploadedFile && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="pill-soft inline-flex items-center gap-2">
-                        📎 {uploadedFile.name}
-                        <button onClick={() => setUploadedFile(null)} style={{ color: 'var(--text-muted)' }}>×</button>
-                      </div>
+            {/* ═══════ Top Navigation Bar ═══════ */}
+            <header style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0 16px',
+                height: '52px',
+                flexShrink: 0,
+                borderBottom: '1px solid #E2E8F0',
+                background: 'rgba(255,255,255,0.9)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+            }}>
+                {/* Logo */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                        width: '32px', height: '32px', borderRadius: '8px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                        boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                    }}>
+                        <span style={{ fontSize: '13px', fontWeight: 900, color: '#fff' }}>A</span>
                     </div>
-                  )}
-                </form>
-                <p className="text-center text-[11px] mt-2.5" style={{ color: '#94A3B8' }}>
-                  Click <span style={{ color: '#6366F1', fontWeight: 600 }}>highlighted concepts</span> in answers to explore deeper •
-                  <span style={{ color: '#6366F1', fontWeight: 600 }}> ★ Must-learn</span> concepts are critical
-                </p>
-              </div>
-            </div>
-          </div>
+                    <div>
+                        <div className="gradient-text" style={{ fontSize: '13px', fontWeight: 800, lineHeight: 1.2 }}>
+                            Alfred AI
+                        </div>
+                        <div style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 500 }}>
+                            Recursive Learning Engine
+                        </div>
+                    </div>
+                </div>
 
-          {/* ─── Right Panel (Tree or Pipeline) ─── */}
-          {rightPanel !== 'none' && (
-            <div
-              className="w-[480px] shrink-0 overflow-hidden animate-slide-up"
-              style={{ borderLeft: '1px solid var(--border-light)', background: 'rgba(255,255,255,0.94)' }}
-            >
-              {rightPanel === 'tree' ? <KnowledgeTree /> : <PipelineView />}
+                {/* Center stats */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: '#6366F1' }}>
+                            D{store.currentDepth}
+                        </span>
+                        <span style={{ color: '#CBD5E1' }}>•</span>
+                        <span style={{ fontWeight: 600, color: '#64748B' }}>
+                            {exploredConcepts.length} explored
+                        </span>
+                    </div>
+                    {store.isProcessing && (
+                        <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div className="pulse-dot" />
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: '#6366F1' }}>Processing…</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {/* Toggle right panel (Tree/Pipeline) */}
+                    <button
+                        onClick={() => setShowRightPanel(!showRightPanel)}
+                        style={{
+                            padding: '6px 12px', borderRadius: '8px', fontSize: '11px',
+                            fontWeight: 600, cursor: 'pointer', border: '1px solid #E2E8F0',
+                            background: showRightPanel ? '#EEF2FF' : 'transparent',
+                            color: showRightPanel ? '#6366F1' : '#64748B',
+                            transition: 'all 0.15s ease',
+                        }}
+                    >
+                        🌳 Tree
+                    </button>
+                    <button
+                        onClick={() => setShowQuiz(true)}
+                        disabled={exploredConcepts.length === 0}
+                        style={{
+                            padding: '6px 12px', borderRadius: '8px', fontSize: '11px',
+                            fontWeight: 600, cursor: exploredConcepts.length === 0 ? 'not-allowed' : 'pointer',
+                            border: '1px solid #E2E8F0', background: 'transparent',
+                            color: '#64748B', opacity: exploredConcepts.length === 0 ? 0.5 : 1,
+                            transition: 'all 0.15s ease',
+                        }}
+                    >
+                        📝 Quiz
+                    </button>
+                    <button
+                        onClick={() => setShowSettings(true)}
+                        style={{
+                            padding: '6px 12px', borderRadius: '8px', fontSize: '11px',
+                            fontWeight: 600, cursor: 'pointer', border: '1px solid #E2E8F0',
+                            background: 'transparent', color: '#64748B',
+                            transition: 'all 0.15s ease',
+                        }}
+                    >
+                        ⚙️
+                    </button>
+                    <button
+                        onClick={handleLogout}
+                        title="Logout"
+                        style={{
+                            width: '28px', height: '28px', borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            border: 'none', background: 'transparent', color: '#94A3B8',
+                            cursor: 'pointer', transition: 'all 0.15s ease',
+                        }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16,17 21,12 16,7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            {/* ═══════ Main Content Area ═══════ */}
+            <div style={{
+                flex: 1,
+                display: 'flex',
+                minHeight: 0,
+                overflow: 'hidden',
+            }}>
+
+                {/* ════ LEFT PANEL: Chat ════ */}
+                <div style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minWidth: 0,
+                    borderRight: showRightPanel ? '1px solid #E2E8F0' : 'none',
+                }}>
+                    {/* Chat messages area */}
+                    <div style={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        padding: '16px',
+                    }}>
+                        {store.conversationMessages.length === 0 ? (
+                            /* ── Empty state ── */
+                            <div style={{
+                                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                justifyContent: 'center', height: '100%', gap: '20px',
+                            }}>
+                                <div style={{ position: 'relative' }}>
+                                    <div className="animate-float" style={{
+                                        width: '64px', height: '64px', borderRadius: '16px',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                                        boxShadow: '0 12px 40px rgba(99,102,241,0.3)',
+                                    }}>
+                                        <span style={{ fontSize: '28px', fontWeight: 900, color: '#fff' }}>A</span>
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'center' }}>
+                                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                                        What would you like to learn?
+                                    </h2>
+                                    <p style={{ fontSize: '13px', color: '#94A3B8', maxWidth: '380px', lineHeight: 1.5 }}>
+                                        Ask any question and Alfred will break it down into explorable concepts,
+                                        building a knowledge tree as you go deeper.
+                                    </p>
+                                </div>
+                                {/* Quick starters */}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center', maxWidth: '420px' }}>
+                                    {[
+                                        'How do neural networks learn?',
+                                        'Explain quantum entanglement',
+                                        'What is blockchain consensus?',
+                                        'How does DNA replication work?',
+                                    ].map(q => (
+                                        <button key={q}
+                                            onClick={() => { setQuery(q); handleSubmit(q); }}
+                                            style={{
+                                                padding: '8px 14px', borderRadius: '10px', fontSize: '11px',
+                                                fontWeight: 500, cursor: 'pointer', border: '1px solid #E2E8F0',
+                                                background: '#FAFBFD', color: '#64748B',
+                                                transition: 'all 0.15s ease',
+                                            }}
+                                        >
+                                            {q}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            /* ── Messages ── */
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                {store.conversationMessages.map((msg, i) => (
+                                    <div key={i} className="animate-slide-up" style={{ animationDelay: `${Math.min(i * 40, 200)}ms`, animationFillMode: 'both' }}>
+                                        {msg.role === 'user' ? (
+                                            /* User message */
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                <div style={{
+                                                    maxWidth: '80%', padding: '10px 16px',
+                                                    borderRadius: '16px 16px 4px 16px', fontSize: '13px',
+                                                    background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                                                    color: 'white', boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
+                                                    lineHeight: 1.5,
+                                                }}>
+                                                    {msg.content}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            /* Assistant message */
+                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                <div style={{
+                                                    width: '28px', height: '28px', borderRadius: '8px',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    flexShrink: 0, marginTop: '2px',
+                                                    background: '#EEF2FF', border: '1px solid #C7D2FE',
+                                                }}>
+                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#6366F1' }}>A</span>
+                                                </div>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    {/* Depth badge */}
+                                                    <div style={{ marginBottom: '6px' }}>
+                                                        <span style={{
+                                                            fontSize: '10px', fontFamily: 'JetBrains Mono, monospace',
+                                                            fontWeight: 700, padding: '2px 8px', borderRadius: '4px',
+                                                            background: '#EEF2FF', color: '#6366F1',
+                                                        }}>
+                                                            Depth {msg.depth}
+                                                        </span>
+                                                    </div>
+                                                    {/* Markdown content */}
+                                                    <div className="prose-light" style={{ fontSize: '13px' }}>
+                                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                                    </div>
+                                                    {/* Concept pills */}
+                                                    {msg.concepts && msg.concepts.length > 0 && (
+                                                        <div style={{ marginTop: '12px' }}>
+                                                            <p style={{
+                                                                fontSize: '10px', fontWeight: 700,
+                                                                textTransform: 'uppercase', letterSpacing: '0.05em',
+                                                                color: '#94A3B8', marginBottom: '6px',
+                                                            }}>
+                                                                Explore further:
+                                                            </p>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                {msg.concepts.map((c, ci) => {
+                                                                    const isExplored = store.exploredTerms.includes(c.term);
+                                                                    return (
+                                                                        <button key={ci}
+                                                                            onClick={() => exploreConcept(c.term)}
+                                                                            disabled={store.isProcessing || isExplored}
+                                                                            className={pillClass(c.color, c.must_learn)}
+                                                                            style={{
+                                                                                animation: `pill-enter 0.3s ease-out ${ci * 50}ms both`,
+                                                                                opacity: isExplored ? 0.5 : 1,
+                                                                            }}
+                                                                            title={c.why_important || `Relevance: ${(c.relevance_score * 100).toFixed(0)}%`}
+                                                                        >
+                                                                            {c.must_learn && <span style={{ fontSize: '10px' }}>🔥</span>}
+                                                                            {c.term}
+                                                                            {isExplored && <span style={{ fontSize: '10px' }}>✓</span>}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                {/* Typing indicator */}
+                                {store.isProcessing && (
+                                    <div className="animate-fade-in" style={{ display: 'flex', gap: '10px' }}>
+                                        <div style={{
+                                            width: '28px', height: '28px', borderRadius: '8px',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            flexShrink: 0, background: '#EEF2FF', border: '1px solid #C7D2FE',
+                                        }}>
+                                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#6366F1' }}>A</span>
+                                        </div>
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', gap: '5px',
+                                            padding: '10px 16px', borderRadius: '16px',
+                                            background: '#F8FAFC', border: '1px solid #E2E8F0',
+                                        }}>
+                                            {[0, 1, 2].map(i => (
+                                                <div key={i} style={{
+                                                    width: '7px', height: '7px', borderRadius: '50%',
+                                                    background: '#6366F1',
+                                                    animation: `typing-dot 1.2s ease-in-out ${i * 0.2}s infinite`,
+                                                }} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Error */}
+                                {store.error && (
+                                    <div className="animate-slide-up" style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        padding: '10px 14px', borderRadius: '12px',
+                                        background: '#FEF2F2', border: '1px solid #FECACA',
+                                    }}>
+                                        <span>⚠️</span>
+                                        <span style={{ fontSize: '12px', fontWeight: 500, color: '#991B1B', flex: 1 }}>
+                                            {store.error}
+                                        </span>
+                                        <button onClick={() => store.setError(null)}
+                                            style={{ fontSize: '11px', fontWeight: 700, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                            Dismiss
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <div ref={chatEndRef} />
+                    </div>
+
+                    {/* ── Input Bar ── */}
+                    <div style={{
+                        flexShrink: 0,
+                        padding: '10px 16px',
+                        borderTop: '1px solid #E2E8F0',
+                        background: 'rgba(255,255,255,0.95)',
+                    }}>
+                        <form onSubmit={e => { e.preventDefault(); handleSubmit(); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <VoiceInput onTranscript={(t) => setQuery(t)} disabled={store.isProcessing} />
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                value={query}
+                                onChange={e => setQuery(e.target.value)}
+                                placeholder={store.conversationMessages.length === 0
+                                    ? "Ask anything to begin learning…"
+                                    : "Ask a follow-up or explore a concept…"}
+                                disabled={store.isProcessing}
+                                className="input-field"
+                                style={{ flex: 1, padding: '10px 14px', fontSize: '13px' }}
+                            />
+                            <button type="submit"
+                                disabled={!query.trim() || store.isProcessing}
+                                className="btn-primary"
+                                style={{
+                                    width: '38px', height: '38px', padding: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    borderRadius: '10px', flexShrink: 0,
+                                }}
+                            >
+                                {store.isProcessing ? (
+                                    <div style={{
+                                        width: '14px', height: '14px',
+                                        border: '2px solid white', borderTopColor: 'transparent',
+                                        borderRadius: '50%', animation: 'spin-slow 0.8s linear infinite',
+                                    }} />
+                                ) : (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                        <line x1="22" y1="2" x2="11" y2="13" />
+                                        <polygon points="22,2 15,22 11,13 2,9" />
+                                    </svg>
+                                )}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                {/* ════ RIGHT PANEL: Tree / Pipeline (Toggleable) ════ */}
+                {showRightPanel && (
+                    <div style={{
+                        width: '360px',
+                        maxWidth: '40vw',
+                        flexShrink: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        background: '#FFFFFF',
+                        animation: 'slide-in-right 0.25s ease-out forwards',
+                    }}>
+                        {/* Tab bar */}
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            padding: '0 10px', height: '38px', flexShrink: 0,
+                            borderBottom: '1px solid #E2E8F0', background: '#FAFBFD',
+                        }}>
+                            {(['tree', 'pipeline'] as RightTab[]).map(tab => {
+                                const active = rightTab === tab;
+                                return (
+                                    <button key={tab}
+                                        onClick={() => setRightTab(tab)}
+                                        className={`tab-btn ${active ? 'tab-btn--active' : ''}`}
+                                        style={{
+                                            padding: '5px 10px', borderRadius: '6px', fontSize: '11px',
+                                            fontWeight: 600, cursor: 'pointer', border: 'none',
+                                            color: active ? '#6366F1' : '#94A3B8',
+                                            background: active ? '#EEF2FF' : 'transparent',
+                                            transition: 'all 0.15s ease',
+                                        }}
+                                    >
+                                        {tab === 'tree' ? '🌳 Tree' : '⚡ Pipeline'}
+                                        {tab === 'pipeline' && store.isProcessing && (
+                                            <span style={{
+                                                marginLeft: '5px', width: '5px', height: '5px',
+                                                borderRadius: '50%', display: 'inline-block',
+                                                background: '#6366F1', verticalAlign: 'middle',
+                                            }} />
+                                        )}
+                                    </button>
+                                );
+                            })}
+                            {/* Close panel */}
+                            <button onClick={() => setShowRightPanel(false)}
+                                style={{
+                                    marginLeft: 'auto', width: '24px', height: '24px',
+                                    borderRadius: '6px', display: 'flex', alignItems: 'center',
+                                    justifyContent: 'center', border: 'none', background: 'transparent',
+                                    color: '#94A3B8', cursor: 'pointer', fontSize: '14px',
+                                }}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {/* Panel content */}
+                        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                            {rightTab === 'tree' ? (
+                                <KnowledgeTree
+                                    data={treeNode}
+                                    onNodeClick={(_, label) => exploreConcept(label)}
+                                    className="h-full"
+                                />
+                            ) : (
+                                <PipelineView steps={pipelineSteps} className="h-full" />
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
-          )}
+
+            {/* ═══════ Modals ═══════ */}
+            {showQuiz && (
+                <QuizModal
+                    sessionId={store.sessionId}
+                    concepts={exploredConcepts}
+                    onClose={() => setShowQuiz(false)}
+                />
+            )}
+            {showSettings && (
+                <SettingsPanel
+                    settings={{
+                        difficulty: store.difficultyLevel,
+                        technicality: store.technicalityLevel,
+                        answerDepth: store.answerDepth,
+                    }}
+                    onUpdate={updateSettings}
+                    onClose={() => setShowSettings(false)}
+                />
+            )}
         </div>
-      </div>
-
-      {/* ─── Modals ─── */}
-      <QuizModal />
-      <ReportView />
-      <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} />
-    </main>
-  );
+    );
 }

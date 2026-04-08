@@ -1,2 +1,8 @@
 PyPDF2
 python-multipart
+fastapi
+uvicorn
+python-dotenv
+pydantic
+langchain
+langchain-openai

@@ -31,12 +31,12 @@ def concept_validator_node(state: AlfredState) -> dict:
 
         # Assign color based on relevance_score
         score = float(c.get("relevance_score", 0.5))
-        if score >= 0.7:
-            color = "green"
-        elif score >= 0.4:
+        if score >= 0.85:
+            color = "orange"
+        elif score >= 0.6:
             color = "yellow"
         else:
-            color = "orange"
+            color = "blue" # Fallback if any
 
         # Difficulty tier labels
         difficulty = int(c.get("difficulty", 2))
@@ -54,7 +54,7 @@ def concept_validator_node(state: AlfredState) -> dict:
             "tier": tier,
             "color": color,
             "explanation": c.get("explanation", ""),
-            "must_learn": bool(c.get("must_learn", score >= 0.8)),
+            "must_learn": score >= 0.9, # Only strictly top concepts get must_learn
             "why_important": c.get("why_important", ""),
         })
 

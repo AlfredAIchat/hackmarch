@@ -2,432 +2,350 @@
 
 import { create } from 'zustand';
 
+/* ─────── Types ─────── */
+
 export interface ConceptItem {
-  term: string;
-  relevance_score: number;
-  difficulty: number;
-  tier?: string;
-  color: 'green' | 'yellow' | 'orange';
-  explanation?: string;
-  must_learn?: boolean;
-  why_important?: string;
-}
-
-export interface PipelineNode {
-  id: string;
-  label: string;
-  status: 'idle' | 'active' | 'complete' | 'error';
-}
-
-export interface TreeNode {
-  name: string;
-  attributes?: Record<string, string>;
-  children?: TreeNode[];
-}
-
-export interface QuizQuestion {
-  question: string;
-  options: string[];
-  correct_index: number;
-  concept: string;
-}
-
-export interface TimelineEntry {
-  type: 'query' | 'term';
-  text: string;
-  depth: number;
-  timestamp: number;
+    term: string;
+    relevance_score: number;
+    difficulty: number;
+    color: 'green' | 'yellow' | 'orange';
+    tier?: string;
+    explanation?: string;
+    must_learn?: boolean;
+    why_important?: string;
 }
 
 export interface ConversationMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  concepts?: ConceptItem[];
-  depth?: number;
+    role: 'user' | 'assistant';
+    content: string;
+    concepts: ConceptItem[];
+    depth: number;
+    timestamp: number;
 }
 
-interface SessionState {
-  // Session
-  sessionId: string;
-  isLoading: boolean;
-  isStreaming: boolean;
-  error: string | null;
-
-  // Conversation (full history displayed as chat)
-  conversationMessages: ConversationMessage[];
-  currentDepth: number;
-
-  // Latest concepts (for the most recent answer)
-  latestConcepts: ConceptItem[];
-
-  // Explored terms (all terms the user has clicked)
-  exploredTerms: string[];
-
-  // Pipeline
-  pipelineNodes: PipelineNode[];
-
-  // Tree
-  treeData: TreeNode | null;
-  rawTree: Record<string, any>;
-
-  // Timeline
-  timeline: TimelineEntry[];
-
-  // Quiz
-  quizQuestions: QuizQuestion[];
-  quizScore: number | null;
-  quizResults: any[];
-  showQuiz: boolean;
-
-  // Report
-  report: string;
-  showReport: boolean;
-
-  // User Preferences (for answer customization)
-  difficultyLevel: number;      // 1-10, default 5
-  technicalityLevel: number;    // 1-10, default 5
-  answerDepth: 'brief' | 'moderate' | 'detailed';  // default 'moderate'
-
-  // Actions
-  setSessionId: (id: string) => void;
-  setLoading: (loading: boolean) => void;
-  setStreaming: (streaming: boolean) => void;
-  setError: (error: string | null) => void;
-  setCurrentDepth: (depth: number) => void;
-  addUserMessage: (text: string) => void;
-  addAssistantMessage: (content: string, concepts: ConceptItem[], depth: number) => void;
-  addConceptsToLastMessage: (concepts: ConceptItem[]) => void;
-  addExploredTerm: (term: string) => void;
-  updatePipelineNode: (nodeId: string, status: PipelineNode['status']) => void;
-  resetPipelineNodes: () => void;
-  updateTree: (tree: Record<string, any>) => void;
-  addTimelineEntry: (entry: TimelineEntry) => void;
-  setQuizQuestions: (questions: QuizQuestion[]) => void;
-  fetchQuiz: () => Promise<void>;
-  setQuizScore: (score: number) => void;
-  setQuizResults: (results: any[]) => void;
-  setShowQuiz: (show: boolean) => void;
-  submitQuiz: (answers: number[]) => Promise<void>;
-  setReport: (report: string) => void;
-  setShowReport: (show: boolean) => void;
-  setDifficultyLevel: (level: number) => void;
-  setTechnicalityLevel: (level: number) => void;
-  setAnswerDepth: (depth: 'brief' | 'moderate' | 'detailed') => void;
-  resetSession: () => void;
+export interface PipelineNode {
+    id: string;
+    label: string;
+    status: 'idle' | 'running' | 'done' | 'error';
 }
 
-const DEFAULT_PIPELINE_NODES: PipelineNode[] = [
-  { id: 'intent_guard', label: 'Intent Guard', status: 'idle' },
-  { id: 'answer_agent', label: 'Answer Agent', status: 'idle' },
-  { id: 'hallucination_checker', label: 'Hallucination Checker', status: 'idle' },
-  { id: 'concept_extractor', label: 'Concept Extractor', status: 'idle' },
-  { id: 'concept_validator', label: 'Concept Validator', status: 'idle' },
-  { id: 'user_gate', label: 'User Gate', status: 'idle' },
-  { id: 'depth_guard', label: 'Depth Guard', status: 'idle' },
-  { id: 'context_builder', label: 'Context Builder', status: 'idle' },
-  { id: 'quiz_agent', label: 'Quiz Agent', status: 'idle' },
-  { id: 'answer_evaluator', label: 'Answer Evaluator', status: 'idle' },
-  { id: 'report_agent', label: 'Report Agent', status: 'idle' },
+export interface TimelineEntry {
+    type: 'query' | 'concept';
+    text: string;
+    depth: number;
+}
+
+export interface TreeNodeData {
+    name: string;
+    depth: number;
+    answer?: string;
+    color?: string;
+    must_learn?: boolean;
+    relevance_score?: number;
+    children: TreeNodeData[];
+}
+
+/* ─────── Pipeline definition ─────── */
+
+const DEFAULT_PIPELINE: PipelineNode[] = [
+    { id: 'intent_guard', label: 'Intent Guard', status: 'idle' },
+    { id: 'context_builder', label: 'Context Builder', status: 'idle' },
+    { id: 'answer_agent', label: 'Answer Agent', status: 'idle' },
+    { id: 'hallucination_checker', label: 'Hallucination Check', status: 'idle' },
+    { id: 'concept_extractor', label: 'Concept Extractor', status: 'idle' },
+    { id: 'concept_validator', label: 'Concept Validator', status: 'idle' },
+    { id: 'user_gate', label: 'Tree Builder', status: 'idle' },
 ];
 
-function buildTreeFromRaw(raw: Record<string, any>): TreeNode | null {
-  if (!raw || Object.keys(raw).length === 0) return null;
+/* ─────── Store Interface ─────── */
 
-  // Find ALL root nodes (nodes with no parent or parent not in tree)
-  const rootKeys: string[] = [];
-  for (const [key, val] of Object.entries(raw)) {
-    if (!val.parent || !(val.parent in raw)) {
-      rootKeys.push(key);
-    }
-  }
+interface SessionState {
+    // Session
+    sessionId: string;
+    isProcessing: boolean;
+    error: string | null;
 
-  // Fallback if no roots found (shouldn't happen, but safety first)
-  if (rootKeys.length === 0) {
-    rootKeys.push(Object.keys(raw)[0]);
-  }
+    // Conversation
+    conversationMessages: ConversationMessage[];
+    currentDepth: number;
 
-  const visited = new Set<string>();
+    // Concepts & Dedup
+    latestConcepts: ConceptItem[];
+    exploredTerms: string[];
+    allSeenConceptTerms: Set<string>; // Global dedup set (case-insensitive)
 
-  function buildNode(key: string, isExplored: boolean = true): TreeNode {
-    visited.add(key);
-    const node = raw[key] || {};
+    // Pipeline
+    pipelineNodes: PipelineNode[];
 
-    // Include both explored and unexplored children
-    const children: TreeNode[] = [];
+    // Knowledge Tree
+    rawTree: Record<string, any>;
+    treeData: TreeNodeData | null;
+    selectedTreeNode: string | null;
 
-    // Add explored children (exist in raw tree)
-    for (const childKey of (node.children || [])) {
-      if (!visited.has(childKey)) {
-        if (childKey in raw) {
-          children.push(buildNode(childKey, true));
-        } else {
-          // Unexplored child - add as placeholder
-          children.push({
-            name: childKey.length > 30 ? childKey.substring(0, 27) + '…' : childKey,
-            attributes: {
-              depth: String((node.depth ?? 0) + 1),
-              fullName: childKey,
-              explored: 'false',
-            },
-          });
+    // Quiz
+    quizQuestions: any[];
+    quizScore: number | null;
+    quizError: string | null;
+    showQuiz: boolean;
+
+    // Report
+    report: string | null;
+    showReport: boolean;
+
+    // Timeline
+    timeline: TimelineEntry[];
+
+    // User preferences
+    difficultyLevel: number;
+    technicalityLevel: number;
+    answerDepth: 'brief' | 'moderate' | 'detailed';
+
+    // Actions
+    setSessionId: (id: string) => void;
+    setProcessing: (val: boolean) => void;
+    setError: (err: string | null) => void;
+    addUserMessage: (content: string) => void;
+    addAssistantMessage: (content: string, concepts: ConceptItem[], depth: number) => void;
+    setCurrentDepth: (d: number) => void;
+    setLatestConcepts: (c: ConceptItem[]) => void;
+    addExploredTerm: (term: string) => void;
+    setPipelineNodeStatus: (id: string, status: PipelineNode['status']) => void;
+    resetPipeline: () => void;
+    updateTree: (rawTree: Record<string, any>) => void;
+    setSelectedTreeNode: (name: string | null) => void;
+    setQuizQuestions: (q: any[]) => void;
+    setQuizScore: (s: number | null) => void;
+    setQuizError: (e: string | null) => void;
+    setShowQuiz: (v: boolean) => void;
+    setReport: (r: string | null) => void;
+    setShowReport: (v: boolean) => void;
+    addTimelineEntry: (entry: TimelineEntry) => void;
+    setDifficultyLevel: (l: number) => void;
+    setTechnicalityLevel: (l: number) => void;
+    setAnswerDepth: (d: 'brief' | 'moderate' | 'detailed') => void;
+    patchLastAssistantConcepts: (concepts: ConceptItem[]) => void;
+    resetSession: () => void;
+}
+
+/* ─────── Tree Builder ─────── */
+
+function buildTreeData(rawTree: Record<string, any>): TreeNodeData | null {
+    if (!rawTree || Object.keys(rawTree).length === 0) return null;
+
+    // Find root(s): nodes with no parent or parent not in tree
+    const roots: string[] = [];
+    for (const [key, node] of Object.entries(rawTree)) {
+        const parent = node.parent;
+        if (!parent || !rawTree[parent]) {
+            roots.push(key);
         }
-      }
     }
 
-    const shortName = key.length > 30 ? key.substring(0, 27) + '…' : key;
+    if (roots.length === 0) {
+        // Fallback: use the first key as root
+        roots.push(Object.keys(rawTree)[0]);
+    }
 
+    function buildNode(key: string, visited: Set<string>): TreeNodeData {
+        if (visited.has(key)) {
+            return { name: key, depth: 0, children: [] };
+        }
+        visited.add(key);
+
+        const node = rawTree[key] || {};
+        const childKeys: string[] = node.children || [];
+
+        // Build children, but only if they exist in the tree AND haven't been visited
+        const children: TreeNodeData[] = childKeys
+            .filter((ck: string) => rawTree[ck] && !visited.has(ck))
+            .map((ck: string) => buildNode(ck, visited));
+
+        return {
+            name: key,
+            depth: node.depth ?? 0,
+            answer: node.answer || '',
+            color: node.color || 'green',
+            must_learn: node.must_learn || false,
+            relevance_score: node.relevance_score || 0.5,
+            children,
+        };
+    }
+
+    if (roots.length === 1) {
+        return buildNode(roots[0], new Set());
+    }
+
+    // Multiple roots: create a virtual root
+    const visited = new Set<string>();
     return {
-      name: shortName,
-      attributes: {
-        depth: String(node.depth ?? 0),
-        fullName: key,
-        explored: isExplored ? 'true' : 'false',
-      },
-      children: children.length > 0 ? children : undefined,
+        name: 'Alfred AI',
+        depth: -1,
+        children: roots.map(r => buildNode(r, visited)),
     };
-  }
-
-  // If multiple roots, create a virtual "Knowledge Map" root
-  if (rootKeys.length > 1) {
-    const rootChildren = rootKeys.map(key => buildNode(key));
-    return {
-      name: 'Knowledge Map',
-      attributes: {
-        depth: '-1',
-        fullName: 'Knowledge Map',
-        explored: 'true',
-        virtual: 'true',
-      },
-      children: rootChildren,
-    };
-  }
-
-  // Single root - build normally
-  return buildNode(rootKeys[0]);
 }
 
-function loadSettings() {
-  if (typeof window === 'undefined') return { difficulty: 5, technicality: 5, depth: 'moderate' as const };
-  try {
-    const raw = localStorage.getItem('alfred_settings');
-    if (!raw) return { difficulty: 5, technicality: 5, depth: 'moderate' as const };
-    const data = JSON.parse(raw);
-    return {
-      difficulty: data.difficultyLevel ?? 5,
-      technicality: data.technicalityLevel ?? 5,
-      depth: data.answerDepth ?? 'moderate',
-    } as const;
-  } catch {
-    return { difficulty: 5, technicality: 5, depth: 'moderate' as const };
-  }
-}
-
-const initialSettings = loadSettings();
-
-const persistSettings = (difficulty: number, technicality: number, depth: 'brief' | 'moderate' | 'detailed') => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem('alfred_settings', JSON.stringify({ difficultyLevel: difficulty, technicalityLevel: technicality, answerDepth: depth }));
-  } catch { }
-};
+/* ─────── Store ─────── */
 
 export const useSessionStore = create<SessionState>((set, get) => ({
-  sessionId: '',
-  isLoading: false,
-  isStreaming: false,
-  error: null,
-  conversationMessages: [],
-  currentDepth: 0,
-  latestConcepts: [],
-  exploredTerms: [],
-  pipelineNodes: [...DEFAULT_PIPELINE_NODES],
-  treeData: null,
-  rawTree: {},
-  timeline: [],
-  quizQuestions: [],
-  quizScore: null,
-  quizResults: [],
-  showQuiz: false,
-  report: '',
-  showReport: false,
+    // Initial state
+    sessionId: '',
+    isProcessing: false,
+    error: null,
+    conversationMessages: [],
+    currentDepth: 0,
+    latestConcepts: [],
+    exploredTerms: [],
+    allSeenConceptTerms: new Set<string>(),
+    pipelineNodes: DEFAULT_PIPELINE.map(n => ({ ...n })),
+    rawTree: {},
+    treeData: null,
+    selectedTreeNode: null,
+    quizQuestions: [],
+    quizScore: null,
+    quizError: null,
+    showQuiz: false,
+    report: null,
+    showReport: false,
+    timeline: [],
+    difficultyLevel: 3,
+    technicalityLevel: 3,
+    answerDepth: 'moderate',
 
-  // User preferences with defaults
-  difficultyLevel: initialSettings.difficulty,
-  technicalityLevel: initialSettings.technicality,
-  answerDepth: initialSettings.depth,
+    // Actions
+    setSessionId: (id) => set({ sessionId: id }),
+    setProcessing: (val) => set({ isProcessing: val }),
+    setError: (err) => set({ error: err }),
 
-  setSessionId: (id) => set({ sessionId: id }),
-  setLoading: (loading) => set({ isLoading: loading }),
-  setStreaming: (streaming) => set({ isStreaming: streaming }),
-  setError: (error) => set({ error }),
-  setCurrentDepth: (depth) => set({ currentDepth: depth }),
+    addUserMessage: (content) => {
+        set((s) => ({
+            conversationMessages: [
+                ...s.conversationMessages,
+                { role: 'user', content, concepts: [], depth: s.currentDepth, timestamp: Date.now() },
+            ],
+        }));
+    },
 
-  addUserMessage: (text) =>
-    set((state) => ({
-      conversationMessages: [
-        ...state.conversationMessages,
-        { role: 'user' as const, content: text },
-      ],
-    })),
+    addAssistantMessage: (content, concepts, depth) => {
+        const state = get();
+        const seenTerms = new Set(state.allSeenConceptTerms);
 
-  addAssistantMessage: (content, concepts, depth) =>
-    set((state) => ({
-      conversationMessages: [
-        ...state.conversationMessages,
-        { role: 'assistant' as const, content, concepts, depth },
-      ],
-      currentDepth: depth,
-    })),
+        // Deduplicate concepts against ALL previously seen concepts
+        const dedupedConcepts = concepts.filter((c) => {
+            const lower = c.term.toLowerCase().trim();
+            if (seenTerms.has(lower)) return false;
+            // Also check against explored terms
+            if (state.exploredTerms.some(t => t.toLowerCase() === lower)) return false;
+            seenTerms.add(lower);
+            return true;
+        });
 
-  addConceptsToLastMessage: (concepts: ConceptItem[]) =>
-    set((state) => {
-      const msgs = [...state.conversationMessages];
-      const lastIdx = msgs.length - 1;
-      if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
-        msgs[lastIdx] = { ...msgs[lastIdx], concepts };
-      }
-      return { conversationMessages: msgs, latestConcepts: concepts };
-    }),
+        set({
+            conversationMessages: [
+                ...state.conversationMessages,
+                { role: 'assistant', content, concepts: dedupedConcepts, depth, timestamp: Date.now() },
+            ],
+            latestConcepts: dedupedConcepts,
+            allSeenConceptTerms: seenTerms,
+            currentDepth: depth,
+        });
+    },
 
-  addExploredTerm: (term: string) =>
-    set((state) => {
-      const lower = term.toLowerCase();
-      if (state.exploredTerms.some(t => t.toLowerCase() === lower)) {
-        return state; // Already explored — no-op (prevents duplication)
-      }
-      return { exploredTerms: [...state.exploredTerms, term] };
-    }),
+    setCurrentDepth: (d) => set({ currentDepth: d }),
+    setLatestConcepts: (c) => set({ latestConcepts: c }),
 
-  updatePipelineNode: (nodeId, status) =>
-    set((state) => ({
-      pipelineNodes: state.pipelineNodes.map((n) =>
-        n.id === nodeId ? { ...n, status } : n
-      ),
-    })),
+    addExploredTerm: (term) => {
+        const state = get();
+        const lower = term.toLowerCase().trim();
+        if (state.exploredTerms.some(t => t.toLowerCase() === lower)) return;
+        const seenTerms = new Set(state.allSeenConceptTerms);
+        seenTerms.add(lower);
+        set({
+            exploredTerms: [...state.exploredTerms, term],
+            allSeenConceptTerms: seenTerms,
+        });
+    },
 
-  resetPipelineNodes: () =>
-    set({
-      pipelineNodes: DEFAULT_PIPELINE_NODES.map((n) => ({
-        ...n,
-        status: 'idle' as const,
-      })),
-    }),
+    setPipelineNodeStatus: (id, status) => {
+        set((s) => ({
+            pipelineNodes: s.pipelineNodes.map((n) =>
+                n.id === id ? { ...n, status } : n
+            ),
+        }));
+    },
 
-  updateTree: (tree) =>
-    set({
-      rawTree: tree,
-      treeData: buildTreeFromRaw(tree),
-    }),
+    resetPipeline: () => {
+        set({ pipelineNodes: DEFAULT_PIPELINE.map(n => ({ ...n, status: 'idle' as const })) });
+    },
 
-  addTimelineEntry: (entry) =>
-    set((state) => ({ timeline: [...state.timeline, entry] })),
+    updateTree: (rawTree) => {
+        const treeData = buildTreeData(rawTree);
+        set({ rawTree, treeData });
+    },
 
-  setQuizQuestions: (questions) => set({ quizQuestions: questions }),
-  fetchQuiz: async () => {
-    const state = get();
-    if (!state.sessionId) {
-      set({ error: 'Start a session first to take a quiz.' });
-      return;
-    }
+    setSelectedTreeNode: (name) => set({ selectedTreeNode: name }),
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const backend = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    setQuizQuestions: (q) => set({ quizQuestions: q }),
+    setQuizScore: (s) => set({ quizScore: s }),
+    setQuizError: (e) => set({ quizError: e }),
+    setShowQuiz: (v) => set({ showQuiz: v }),
 
-    try {
-      const resp = await fetch(`${backend}/session/quiz`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: state.sessionId }),
-        signal: controller.signal,
-      });
+    setReport: (r) => set({ report: r }),
+    setShowReport: (v) => set({ showReport: v }),
 
-      const data = await resp.json();
-      if (!resp.ok) {
-        throw new Error(data?.error || 'Quiz fetch failed');
-      }
+    addTimelineEntry: (entry) => {
+        set((s) => ({ timeline: [...s.timeline, entry] }));
+    },
 
-      set({ quizQuestions: data.quiz_questions ?? [], showQuiz: true, error: null });
-    } catch (err: any) {
-      const message = err?.name === 'AbortError' ? 'Quiz request timed out' : (err?.message || 'Unable to load quiz questions');
-      set({ error: message });
-    } finally {
-      clearTimeout(timeout);
-    }
-  },
-  setQuizScore: (score) => set({ quizScore: score }),
-  setQuizResults: (results) => set({ quizResults: results }),
-  setShowQuiz: (show) => set({ showQuiz: show }),
+    setDifficultyLevel: (l) => set({ difficultyLevel: l }),
+    setTechnicalityLevel: (l) => set({ technicalityLevel: l }),
+    setAnswerDepth: (d) => set({ answerDepth: d }),
 
-  submitQuiz: async (answers: number[]) => {
-    const state = get();
-    if (!state.sessionId) return;
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      const backend = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    patchLastAssistantConcepts: (concepts) => {
+        const state = get();
+        const msgs = state.conversationMessages;
+        const lastIdx = msgs.map(m => m.role).lastIndexOf('assistant');
+        if (lastIdx === -1) {
+            // No assistant message yet — just store as latestConcepts
+            set({ latestConcepts: concepts });
+            return;
+        }
+        const seenTerms = new Set(state.allSeenConceptTerms);
+        const dedupedConcepts = concepts.filter((c) => {
+            const lower = c.term.toLowerCase().trim();
+            if (seenTerms.has(lower)) return false;
+            if (state.exploredTerms.some(t => t.toLowerCase() === lower)) return false;
+            seenTerms.add(lower);
+            return true;
+        });
+        const updated = msgs.map((m, i) =>
+            i === lastIdx ? { ...m, concepts: dedupedConcepts } : m
+        );
+        set({
+            conversationMessages: updated,
+            latestConcepts: dedupedConcepts,
+            allSeenConceptTerms: seenTerms,
+        });
+    },
 
-      const resp = await fetch(`${backend}/session/submit-quiz`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: state.sessionId, answers }),
-        signal: controller.signal,
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        throw new Error(data?.error || 'Quiz submit failed');
-      }
-      set({
-        quizScore: data.quiz_score ?? 0,
-        quizResults: data.results ?? [],
-      });
-    } catch (err) {
-      const message = (err as any)?.name === 'AbortError' ? 'Quiz submit timed out' : (err as any)?.message || 'Quiz submit error';
-      set({ error: message });
-    }
-  },
-
-  setReport: (report) => set({ report }),
-  setShowReport: (show) => set({ showReport: show }),
-
-  setDifficultyLevel: (level) => {
-    const next = Math.max(1, Math.min(10, level));
-    const state = get();
-    persistSettings(next, state.technicalityLevel, state.answerDepth);
-    set({ difficultyLevel: next });
-  },
-  setTechnicalityLevel: (level) => {
-    const next = Math.max(1, Math.min(10, level));
-    const state = get();
-    persistSettings(state.difficultyLevel, next, state.answerDepth);
-    set({ technicalityLevel: next });
-  },
-  setAnswerDepth: (depth) => {
-    const state = get();
-    persistSettings(state.difficultyLevel, state.technicalityLevel, depth);
-    set({ answerDepth: depth });
-  },
-
-  resetSession: () =>
-    set({
-      sessionId: '',
-      isLoading: false,
-      isStreaming: false,
-      error: null,
-      conversationMessages: [],
-      currentDepth: 0,
-      latestConcepts: [],
-      exploredTerms: [],
-      pipelineNodes: [...DEFAULT_PIPELINE_NODES],
-      treeData: null,
-      rawTree: {},
-      timeline: [],
-      quizQuestions: [],
-      quizScore: null,
-      quizResults: [],
-      showQuiz: false,
-      report: '',
-      showReport: false,
-      // Keep user preferences on reset
+    resetSession: () => set({
+        sessionId: '',
+        isProcessing: false,
+        error: null,
+        conversationMessages: [],
+        currentDepth: 0,
+        latestConcepts: [],
+        exploredTerms: [],
+        allSeenConceptTerms: new Set<string>(),
+        pipelineNodes: DEFAULT_PIPELINE.map(n => ({ ...n })),
+        rawTree: {},
+        treeData: null,
+        selectedTreeNode: null,
+        quizQuestions: [],
+        quizScore: null,
+        quizError: null,
+        showQuiz: false,
+        report: null,
+        showReport: false,
+        timeline: [],
     }),
 }));

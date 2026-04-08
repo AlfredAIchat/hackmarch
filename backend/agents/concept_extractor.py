@@ -3,13 +3,14 @@ Concept Extractor — Term extraction node.
 Temperature: 0.1 (very low for consistent extraction).
 Extracts ONLY essential concepts with must-learn scoring.
 Deduplicates against already explored terms.
+Adapts concept extraction based on user difficulty & technicality preferences.
 """
 
 import json
 from backend.state import AlfredState
 from backend.llm import chat
 
-SYSTEM_PROMPT = (
+BASE_SYSTEM_PROMPT = (
     "Extract ONLY 2-3 of the MOST IMPORTANT conceptual terms from this answer. "
     "These should be terms that are ESSENTIAL for deep understanding - terms a learner "
     "absolutely MUST know to truly grasp the topic.\n\n"
@@ -28,9 +29,59 @@ SYSTEM_PROMPT = (
 )
 
 
+def _get_extraction_adjustments(difficulty: int, technicality: int) -> str:
+    """Generate extraction adjustments based on user preferences."""
+    parts = []
+
+    # Difficulty adjustments
+    if difficulty <= 3:
+        parts.append(
+            "DIFFICULTY CONTEXT: Extract FOUNDATIONAL concepts only. "
+            "Pick terms that a beginner would need to learn first. "
+            "Avoid advanced or niche terms."
+        )
+    elif difficulty <= 6:
+        parts.append(
+            "DIFFICULTY CONTEXT: Extract a mix of foundational and intermediate concepts. "
+            "Include terms that bridge basic understanding to deeper knowledge."
+        )
+    else:  # 7-10
+        parts.append(
+            "DIFFICULTY CONTEXT: Extract ADVANCED, CHALLENGING concepts. "
+            "Prioritize terms the learner likely DOESN'T know yet. "
+            "Pick niche, deep, or cutting-edge concepts that push boundaries."
+        )
+
+    # Technicality adjustments
+    if technicality <= 3:
+        parts.append(
+            "TECHNICALITY CONTEXT: Prefer conceptual/plain-language term names. "
+            "Avoid jargon-heavy or overly academic terms."
+        )
+    elif technicality <= 6:
+        parts.append(
+            "TECHNICALITY CONTEXT: Use standard domain terminology. "
+            "Terms should be recognizable in the field but not overly specialized."
+        )
+    else:  # 7-10
+        parts.append(
+            "TECHNICALITY CONTEXT: Use PRECISE TECHNICAL TERMINOLOGY. "
+            "Extract domain-specific, academic, or specialized terms. "
+            "Prefer formal names over colloquial descriptions."
+        )
+
+    return "\n".join(parts)
+
+
 def concept_extractor_node(state: AlfredState) -> dict:
     answer = state.get("current_answer", "")
     explored_terms = state.get("explored_terms", [])
+    difficulty_level = state.get("difficulty_level", 5)
+    technicality_level = state.get("technicality_level", 5)
+
+    # Build dynamic prompt with difficulty/technicality adjustments
+    adjustments = _get_extraction_adjustments(difficulty_level, technicality_level)
+    system_prompt = f"{BASE_SYSTEM_PROMPT}\n\n{adjustments}"
 
     # Create exclusion prompt for already explored terms
     exclusion_note = ""
@@ -42,7 +93,7 @@ def concept_extractor_node(state: AlfredState) -> dict:
 
     raw = chat(
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT + exclusion_note},
+            {"role": "system", "content": system_prompt + exclusion_note},
             {"role": "user", "content": answer},
         ],
         temperature=0.1,

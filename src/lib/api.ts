@@ -1,140 +1,155 @@
 /**
- * Alfred AI Frontend API Contract
- * ─────────────────────────
- * All backend endpoints are defined here. If you change the backend URL structure,
- * update ONLY this file — the rest of the frontend will automatically use the new URLs.
+ * Alfred AI — API Client
+ * All communication with the backend flows through Next.js API routes
+ * which proxy to the FastAPI backend.
  *
- * How to change frontend without breaking backend:
- * 1. All API calls in page.tsx, AnswerPanel.tsx, QuizModal.tsx, ReportView.tsx
- *    should import from here instead of hardcoding URLs.
- * 2. The Next.js API routes in /src/app/api/ proxy to BACKEND_BASE_URL below.
- * 3. To point to a different backend, change BACKEND_BASE_URL in .env.local:
- *    NEXT_PUBLIC_BACKEND_URL=http://your-backend.com
+ * Backend SSE format:  data: {"type": "<event>", "data": {<payload>}}\n\n
  */
 
-const BACKEND_BASE_URL =
-    (typeof window !== 'undefined'
-        ? (process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000')
-        : process.env.BACKEND_URL ?? 'http://localhost:8000');
+const API_BASE = '/api';
 
-// ── Endpoint constants ──────────────────────────────────────────────────────
+/* ─────── Types ─────── */
 
-export const ENDPOINTS = {
-    /** POST — start a new session and stream SSE events */
-    SESSION_START: `${BACKEND_BASE_URL}/session/start`,
-    /** POST — select a concept term and stream SSE events */
-    SELECT_TERM: `${BACKEND_BASE_URL}/session/select-term`,
-    /** POST — generate quiz questions for the session */
-    QUIZ_GENERATE: `${BACKEND_BASE_URL}/session/quiz`,
-    /** POST — submit quiz answers and get scored results */
-    QUIZ_SUBMIT: `${BACKEND_BASE_URL}/session/submit-quiz`,
-    /** GET  — generate and return a session learning report */
-    REPORT: (sessionId: string) => `${BACKEND_BASE_URL}/session/report/${sessionId}`,
-    /** POST — transcribe voice audio (Sarvam AI) */
-    VOICE_TRANSCRIBE: `${BACKEND_BASE_URL}/voice/transcribe`,
-    /** GET  — backend health check */
-    HEALTH: `${BACKEND_BASE_URL}/health`,
-} as const;
-
-// ── Next.js proxy routes (avoid CORS in production) ──────────────────────────
-
-export const PROXY = {
-    /** POST — proxied session start SSE stream */
-    SESSION: '/api/session',
-    /** POST — proxied select-term SSE stream */
-    SELECT_TERM: '/api/select-term',
-    /** POST — proxied quiz generate + submit */
-    QUIZ: '/api/quiz',
-    /** POST — proxied voice transcription */
-    VOICE: '/api/voice',
-} as const;
-
-// ── SSE Event types ───────────────────────────────────────────────────────────
-
-export interface SSEEvent {
-    type:
-    | 'session_started'
-    | 'node_activated'
-    | 'answer_ready'
-    | 'concepts_ready'
-    | 'tree_update'
-    | 'quiz_ready'
-    | 'report_ready'
-    | 'rejected'
-    | 'error';
-    data: Record<string, any>;
-}
-
-// ── Request types ──────────────────────────────────────────────────────────
-
-export interface SessionStartRequest {
+export interface StartSessionParams {
     query: string;
-    session_id?: string;
-}
-
-export interface SelectTermRequest {
     session_id: string;
-    selected_term: string;
+    difficulty_level?: number;
+    technicality_level?: number;
+    answer_depth?: string;
+    file_context?: string;
 }
 
-export interface QuizGenerateRequest {
+export interface SelectTermParams {
     session_id: string;
+    term: string;
+    difficulty_level?: number;
+    technicality_level?: number;
+    answer_depth?: string;
 }
 
-export interface QuizSubmitRequest {
+export interface QuizRequestParams {
+    session_id: string;
+    explored_terms?: string[];
+}
+
+export interface QuizSubmitParams {
     session_id: string;
     answers: number[];
 }
 
-// ── Response types ──────────────────────────────────────────────────────────
+/* ─────── SSE Stream Helpers ─────── */
 
-export interface QuizGenerateResponse {
-    quiz_questions: Array<{
-        question: string;
-        options: string[];
-        correct_index: number;
-        concept: string;
-    }>;
-}
+export type SSEEventHandler = (event: string, data: any) => void;
 
-export interface QuizSubmitResponse {
-    quiz_score: number;
-    results: Array<{
-        is_correct: boolean;
-        explanation: string;
-        concept_reinforced: string;
-    }>;
-}
+/**
+ * Parse and stream SSE events from the backend.
+ * Backend sends: data: {"type": "event_name", "data": { ... }}\n\n
+ * We unwrap the envelope and call onEvent(type, innerData).
+ */
+async function streamSSE(url: string, body: object, onEvent: SSEEventHandler): Promise<void> {
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
 
-export interface ReportResponse {
-    report: string;
-}
+    if (!resp.ok) {
+        const errorText = await resp.text().catch(() => 'Unknown error');
+        throw new Error(`API error ${resp.status}: ${errorText}`);
+    }
 
-// ── Helper to parse SSE streams ─────────────────────────────────────────────
+    const reader = resp.body?.getReader();
+    if (!reader) throw new Error('No response stream');
 
-export async function* parseSSEStream(
-    response: Response
-): AsyncGenerator<SSEEvent> {
-    const reader = response.body?.getReader();
     const decoder = new TextDecoder();
-    if (!reader) return;
-
     let buffer = '';
+
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() ?? '';
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            try {
-                yield JSON.parse(line.slice(6)) as SSEEvent;
-            } catch {
-                // Skip malformed events
+            if (line.startsWith('data:')) {
+                const raw = line.slice(5).trim();
+                if (!raw) continue;
+                try {
+                    const parsed = JSON.parse(raw);
+                    // Backend wraps events in {"type": "...", "data": {...}}
+                    if (parsed && typeof parsed.type === 'string') {
+                        onEvent(parsed.type, parsed.data || parsed);
+                    } else {
+                        onEvent('message', parsed);
+                    }
+                } catch {
+                    // Non-JSON data, pass as raw string
+                    onEvent('message', raw);
+                }
             }
         }
     }
+}
+
+/* ─────── API Functions ─────── */
+
+export async function startSession(params: StartSessionParams, onEvent: SSEEventHandler): Promise<void> {
+    return streamSSE(`${API_BASE}/session`, params, onEvent);
+}
+
+export async function selectTerm(params: SelectTermParams, onEvent: SSEEventHandler): Promise<void> {
+    // Map frontend field names to backend field names
+    const body = {
+        session_id: params.session_id,
+        selected_term: params.term,
+        difficulty_level: params.difficulty_level,
+        technicality_level: params.technicality_level,
+        answer_depth: params.answer_depth,
+    };
+    return streamSSE(`${API_BASE}/select-term`, body, onEvent);
+}
+
+export async function requestQuiz(params: QuizRequestParams): Promise<{ questions: any[]; error?: string }> {
+    const resp = await fetch(`${API_BASE}/quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+        return { questions: [], error: data.error || 'Failed to generate quiz' };
+    }
+    const questions = data.quiz_questions || data.questions || [];
+    return { questions, error: data.error };
+}
+
+export async function submitQuiz(params: QuizSubmitParams): Promise<{ score: number; results: any[]; error?: string }> {
+    const resp = await fetch(`${API_BASE}/quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+        return { score: 0, results: [], error: data.error || 'Failed to submit quiz' };
+    }
+    return {
+        score: data.quiz_score ?? data.score ?? 0,
+        results: data.quiz_answers ?? data.results ?? [],
+        error: data.error,
+    };
+}
+
+export async function uploadFile(file: File, sessionId?: string): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (sessionId) formData.append('session_id', sessionId);
+    const resp = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        body: formData,
+    });
+    if (!resp.ok) throw new Error('Upload failed');
+    return resp.json();
 }

@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useUserStore } from '@/store/userStore';
 
-/* ─────── Progress Ring (inline SVG) ─────── */
+/* ─────── Progress Ring ─────── */
 function ProgressRing({ value, max, size = 48, strokeWidth = 4 }: {
     value: number; max: number; size?: number; strokeWidth?: number;
 }) {
@@ -14,10 +14,10 @@ function ProgressRing({ value, max, size = 48, strokeWidth = 4 }: {
     const offset = circumference * (1 - percent);
 
     return (
-        <svg width={size} height={size} className="progress-ring">
+        <svg width={size} height={size}>
             <circle
                 cx={size / 2} cy={size / 2} r={radius}
-                fill="none" stroke="#E2E8F0" strokeWidth={strokeWidth}
+                fill="none" stroke="#F1F5F9" strokeWidth={strokeWidth}
             />
             <circle
                 cx={size / 2} cy={size / 2} r={radius}
@@ -27,6 +27,7 @@ function ProgressRing({ value, max, size = 48, strokeWidth = 4 }: {
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={offset}
+                style={{ transition: 'stroke-dashoffset 0.6s cubic-bezier(0.16, 1, 0.3, 1)' }}
             />
             <defs>
                 <linearGradient id="sidebarProgressGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -44,7 +45,7 @@ function ProgressRing({ value, max, size = 48, strokeWidth = 4 }: {
     );
 }
 
-/* ─────── Main Component (inline panel, not modal) ─────── */
+/* ─────── Main Component ─────── */
 export default function ChatSidebar() {
     const {
         exploredTerms,
@@ -59,7 +60,7 @@ export default function ChatSidebar() {
 
     const totalConceptsEncountered = useMemo(() => {
         let count = 0;
-        conversationMessages.forEach((m: any) => {
+        conversationMessages.forEach((m) => {
             if (m.concepts) count += m.concepts.length;
         });
         return Math.max(count, 1);
@@ -68,7 +69,7 @@ export default function ChatSidebar() {
     return (
         <div className="h-full flex flex-col overflow-y-auto bg-white/90 backdrop-blur">
             {/* Header */}
-            <div className="p-4 border-b" style={{ borderColor: 'var(--border-light)' }}>
+            <div className="p-4" style={{ borderBottom: '1px solid #E2E8F0' }}>
                 <div className="flex items-center gap-3">
                     <div
                         className="w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-black text-white"
@@ -93,15 +94,13 @@ export default function ChatSidebar() {
                     Session
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
-                    {/* Progress Ring */}
-                    <div className="subtle-card p-3 flex flex-col items-center">
+                    <div className="rounded-xl p-3 flex flex-col items-center" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
                         <ProgressRing value={exploredTerms.length} max={totalConceptsEncountered} />
                         <p className="text-[10px] font-semibold mt-1.5" style={{ color: 'var(--text-muted)' }}>Explored</p>
                     </div>
-                    {/* Depth */}
-                    <div className="subtle-card p-3 flex flex-col items-center justify-center">
-                        <div className="text-2xl font-black" style={{ color: 'var(--accent-indigo)' }}>{currentDepth}</div>
-                        <p className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Depth</p>
+                    <div className="rounded-xl p-3 flex flex-col items-center justify-center" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                        <div className="text-2xl font-black" style={{ color: '#6366F1' }}>{currentDepth}</div>
+                        <p className="text-[10px] font-semibold" style={{ color: '#94A3B8' }}>Depth</p>
                     </div>
                 </div>
             </div>
@@ -116,7 +115,8 @@ export default function ChatSidebar() {
                         {exploredTerms.map((term, i) => (
                             <span
                                 key={i}
-                                className="pill-soft text-[10px] font-semibold"
+                                className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                                style={{ background: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0' }}
                             >
                                 ✓ {term}
                             </span>
@@ -135,8 +135,8 @@ export default function ChatSidebar() {
                         {savedSessions.slice(0, 8).map((s) => (
                             <div
                                 key={s.id}
-                                className="subtle-card px-3 py-2 cursor-pointer hover:shadow-md transition"
-                                onClick={() => handleLoadSession(s.id)}
+                                className="px-3 py-2 rounded-lg transition-colors"
+                                style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}
                             >
                                 <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
                                     {s.title}

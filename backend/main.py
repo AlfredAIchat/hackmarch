@@ -8,6 +8,7 @@ import io
 import json
 import uuid
 import asyncio
+import os
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -34,9 +35,14 @@ from backend.llm import chat
 
 app = FastAPI(title="Alfred AI Pipeline API", version="1.0.0")
 
+# Get allowed origins from environment or use defaults
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+# Handle comma-separated origins and strip whitespace
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,9 +63,9 @@ class StartRequest(BaseModel):
 class SelectTermRequest(BaseModel):
     session_id: str
     selected_term: str
-    difficulty_level: int | None = None
-    technicality_level: int | None = None
-    answer_depth: str | None = None
+    difficulty_level: int = 5
+    technicality_level: int = 5
+    answer_depth: str = "moderate"
 
 
 class QuizSubmitRequest(BaseModel):
@@ -216,16 +222,19 @@ async def start_session(req: StartRequest):
             state.update(r)
             yield _sse_event("node_activated", {"node": "answer_agent", "status": "complete"})
 
-            # 4. Hallucination Checker
+            # 4. Hallucination Checker & 5. Concept Extractor (in parallel)
             yield _sse_event("node_activated", {"node": "hallucination_checker", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: hallucination_checker_node(state))
-            state.update(r)
-            yield _sse_event("node_activated", {"node": "hallucination_checker", "status": "complete"})
-
-            # 5. Concept Extractor
             yield _sse_event("node_activated", {"node": "concept_extractor", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: concept_extractor_node(state))
-            state.update(r)
+
+            # Copy state so concurrent nodes don't mutate the same dictionary during execution
+            t1 = loop.run_in_executor(None, lambda: hallucination_checker_node(dict(state)))
+            t2 = loop.run_in_executor(None, lambda: concept_extractor_node(dict(state)))
+
+            r1, r2 = await asyncio.gather(t1, t2)
+            state.update(r1)
+            state.update(r2)
+
+            yield _sse_event("node_activated", {"node": "hallucination_checker", "status": "complete"})
             yield _sse_event("node_activated", {"node": "concept_extractor", "status": "complete"})
 
             # 6. Concept Validator
@@ -332,6 +341,10 @@ async def select_term(req: SelectTermRequest):
     state["selected_term"] = req.selected_term
     state["user_query"] = req.selected_term
     state["current_depth"] = state.get("current_depth", 0) + 1
+    # Forward user preferences
+    state["difficulty_level"] = max(1, min(10, req.difficulty_level))
+    state["technicality_level"] = max(1, min(10, req.technicality_level))
+    state["answer_depth"] = req.answer_depth if req.answer_depth in ["brief", "moderate", "detailed"] else "moderate"
     session_id = req.session_id
 
     async def event_stream():
@@ -351,16 +364,18 @@ async def select_term(req: SelectTermRequest):
             state.update(r)
             yield _sse_event("node_activated", {"node": "answer_agent", "status": "complete"})
 
-            # 3. Hallucination Checker
+            # 3. Hallucination Checker & 4. Concept Extractor (in parallel)
             yield _sse_event("node_activated", {"node": "hallucination_checker", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: hallucination_checker_node(state))
-            state.update(r)
-            yield _sse_event("node_activated", {"node": "hallucination_checker", "status": "complete"})
-
-            # 4. Concept Extractor
             yield _sse_event("node_activated", {"node": "concept_extractor", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: concept_extractor_node(state))
-            state.update(r)
+
+            t1 = loop.run_in_executor(None, lambda: hallucination_checker_node(dict(state)))
+            t2 = loop.run_in_executor(None, lambda: concept_extractor_node(dict(state)))
+
+            r1, r2 = await asyncio.gather(t1, t2)
+            state.update(r1)
+            state.update(r2)
+
+            yield _sse_event("node_activated", {"node": "hallucination_checker", "status": "complete"})
             yield _sse_event("node_activated", {"node": "concept_extractor", "status": "complete"})
 
             # 5. Concept Validator

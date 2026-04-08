@@ -1,24 +1,34 @@
 'use client';
 
-import React from 'react';
-import { useSessionStore } from '@/store/sessionStore';
+import React, { useCallback } from 'react';
 
-interface SettingsPanelProps {
-    show: boolean;
+/* ─────── Types ─────── */
+interface SessionSettings {
+    difficulty: number;
+    technicality: number;
+    answerDepth: 'brief' | 'moderate' | 'detailed';
+}
+
+interface Props {
+    settings: SessionSettings;
+    onUpdate: (settings: SessionSettings) => void;
     onClose: () => void;
 }
 
-export default function SettingsPanel({ show, onClose }: SettingsPanelProps) {
-    const {
-        difficultyLevel,
-        technicalityLevel,
-        answerDepth,
-        setDifficultyLevel,
-        setTechnicalityLevel,
-        setAnswerDepth,
-    } = useSessionStore();
+/* ─────── Constants ─────── */
+const DEPTH_OPTIONS: { value: SessionSettings['answerDepth']; label: string; description: string; icon: string }[] = [
+    { value: 'brief', label: 'Brief', description: 'Quick, concise answers', icon: '⚡' },
+    { value: 'moderate', label: 'Moderate', description: 'Balanced explanations', icon: '📖' },
+    { value: 'detailed', label: 'Detailed', description: 'Deep, comprehensive answers', icon: '🔬' },
+];
 
-    if (!show) return null;
+const DIFFICULTY_LABELS = ['Beginner', 'Easy', 'Moderate', 'Advanced', 'Expert'];
+const TECH_LABELS = ['Simple', 'Basic', 'Intermediate', 'Technical', 'Academic'];
+
+export default function SettingsPanel({ settings, onUpdate, onClose }: Props) {
+    const update = useCallback((partial: Partial<SessionSettings>) => {
+        onUpdate({ ...settings, ...partial });
+    }, [settings, onUpdate]);
 
     const applyPreset = (preset: 'easy' | 'balanced' | 'advanced') => {
         switch (preset) {
@@ -41,198 +51,164 @@ export default function SettingsPanel({ show, onClose }: SettingsPanelProps) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-            <div
-                className="w-full max-w-md mx-4 animate-slide-up"
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="relative w-full max-w-md mx-4 animate-scale-in"
+                onClick={e => e.stopPropagation()}
                 style={{
-                    background: 'rgba(255, 255, 255, 0.97)',
-                    backdropFilter: 'blur(20px)',
+                    background: '#FFFFFF',
                     borderRadius: '20px',
-                    border: '1px solid #E2E8F0',
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)',
-                    padding: '24px',
+                    boxShadow: '0 25px 60px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04)',
+                    maxHeight: '90vh',
+                    overflow: 'auto',
                 }}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between p-6 pb-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-                            style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}>
-                            ⚙️
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg, #EEF2FF, #F5F3FF)' }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2" strokeLinecap="round">
+                                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold" style={{ color: '#0F172A' }}>Answer Settings</h2>
-                            <p className="text-xs" style={{ color: '#94A3B8' }}>Customize AI responses</p>
+                            <h2 className="text-base font-bold" style={{ color: '#0F172A' }}>Learning Settings</h2>
+                            <p className="text-xs" style={{ color: '#94A3B8' }}>Customize your AI learning experience</p>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                        style={{ color: '#94A3B8', background: '#F3F5F9' }}
-                    >
-                        ×
+                    <button onClick={onClose}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-gray-100"
+                        style={{ color: '#94A3B8' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                            <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
                     </button>
                 </div>
 
-                <div className="space-y-6">
-                    {/* Quick presets */}
-                    <div className="flex flex-wrap gap-2">
-                        {[
-                            { key: 'easy', label: 'Easy', emoji: '😊', desc: 'Simple & concise', active: difficultyLevel <= 3 },
-                            { key: 'balanced', label: 'Balanced', emoji: '🎯', desc: 'Everyday + technical', active: difficultyLevel > 3 && difficultyLevel < 7 },
-                            { key: 'advanced', label: 'Advanced', emoji: '🚀', desc: 'Deep & technical', active: difficultyLevel >= 7 },
-                        ].map((preset) => (
-                            <button
-                                key={preset.key}
-                                onClick={() => applyPreset(preset.key as 'easy' | 'balanced' | 'advanced')}
-                                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${preset.active ? 'text-white' : ''}`}
-                                style={{
-                                    background: preset.active
-                                        ? 'linear-gradient(135deg, var(--accent-indigo), var(--accent-sky))'
-                                        : '#F3F5F9',
-                                    color: preset.active ? '#fff' : 'var(--text-secondary)',
-                                    border: `1px solid ${preset.active ? 'transparent' : 'var(--border-light)'}`,
-                                    boxShadow: preset.active ? 'var(--shadow-glow-indigo)' : 'none',
-                                }}
-                            >
-                                <span>{preset.emoji}</span>
-                                <span>{preset.label}</span>
-                                <span className="text-[10px] font-medium" style={{ color: preset.active ? '#e7ecff' : 'var(--text-muted)' }}>
-                                    {preset.desc}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Difficulty Level */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold" style={{ color: '#0F172A' }}>
-                                Difficulty Level
-                            </span>
-                            <span
-                                className="px-2.5 py-0.5 rounded-full text-xs font-bold"
-                                style={{ background: '#EEF2FF', color: '#6366F1', border: '1px solid #C7D2FE' }}
-                            >
-                                {difficultyLevel}
-                            </span>
-                        </div>
-                        <input
-                            type="range"
-                            min="1"
-                            max="10"
-                            value={difficultyLevel}
-                            onChange={(e) => setDifficultyLevel(Number(e.target.value))}
-                            className="w-full"
-                            style={{
-                                background: `linear-gradient(to right, #6366F1 0%, #6366F1 ${(difficultyLevel - 1) * 11.11}%, #E2E8F0 ${(difficultyLevel - 1) * 11.11}%, #E2E8F0 100%)`
-                            }}
-                        />
-                        {difficultyLevel <= 3 && (
-                            <div className="pill-soft text-[11px] font-semibold inline-flex items-center gap-2">
-                                😊 Simple mode • answers stay concise
+                <div className="px-6 pb-6 space-y-6">
+                    {/* ─── Difficulty ─── */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm">🎯</span>
+                                <label className="text-xs font-bold uppercase tracking-wider" style={{ color: '#475569' }}>
+                                    Difficulty
+                                </label>
                             </div>
-                        )}
-                        <div className="flex justify-between text-[10px] font-medium" style={{ color: '#94A3B8' }}>
-                            <span>Easy</span>
-                            <span>Challenging</span>
-                        </div>
-                        <p className="text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
-                            {difficultyLevel <= 3
-                                ? '📚 Simple concepts and everyday analogies'
-                                : difficultyLevel <= 6
-                                    ? '🎯 Balanced foundational and advanced concepts'
-                                    : '🚀 Advanced concepts that push your knowledge boundaries'}
-                        </p>
-                    </div>
-
-                    {/* Technicality Level */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold" style={{ color: '#0F172A' }}>
-                                Technicality Level
-                            </span>
-                            <span
-                                className="px-2.5 py-0.5 rounded-full text-xs font-bold"
-                                style={{ background: '#F5F3FF', color: '#8B5CF6', border: '1px solid #DDD6FE' }}
-                            >
-                                {technicalityLevel}
+                            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full"
+                                style={{ background: '#EEF2FF', color: '#6366F1' }}>
+                                {DIFFICULTY_LABELS[settings.difficulty - 1] || 'Moderate'}
                             </span>
                         </div>
                         <input
                             type="range"
-                            min="1"
-                            max="10"
-                            value={technicalityLevel}
-                            onChange={(e) => setTechnicalityLevel(Number(e.target.value))}
-                            className="w-full"
-                            style={{
-                                background: `linear-gradient(to right, #8B5CF6 0%, #8B5CF6 ${(technicalityLevel - 1) * 11.11}%, #E2E8F0 ${(technicalityLevel - 1) * 11.11}%, #E2E8F0 100%)`
-                            }}
+                            min={1} max={5} step={1}
+                            value={settings.difficulty}
+                            onChange={e => update({ difficulty: +e.target.value })}
+                            className="premium-slider"
+                            style={{ backgroundSize: `${((settings.difficulty - 1) / 4) * 100}% 100%` }}
                         />
-                        <div className="flex justify-between text-[10px] font-medium" style={{ color: '#94A3B8' }}>
-                            <span>Plain Language</span>
-                            <span>Technical</span>
-                        </div>
-                        <p className="text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
-                            {technicalityLevel <= 3
-                                ? '💬 Everyday language, minimal jargon'
-                                : technicalityLevel <= 6
-                                    ? '⚙️ Balanced practical and technical terms'
-                                    : '🔬 Precise technical language and domain terminology'}
-                        </p>
-                    </div>
-
-                    {/* Answer Depth */}
-                    <div className="space-y-3">
-                        <span className="text-sm font-semibold block" style={{ color: '#0F172A' }}>
-                            Answer Depth
-                        </span>
-                        <div className="grid grid-cols-3 gap-2">
-                            {(['brief', 'moderate', 'detailed'] as const).map((depth) => (
-                                <button
-                                    key={depth}
-                                    onClick={() => setAnswerDepth(depth)}
-                                    className="px-3 py-2.5 rounded-xl text-xs font-semibold transition-all capitalize"
-                                    style={{
-                                        background: answerDepth === depth
-                                            ? 'linear-gradient(135deg, #6366F1, #8B5CF6)'
-                                            : '#F3F5F9',
-                                        color: answerDepth === depth ? '#fff' : '#475569',
-                                        border: `1.5px solid ${answerDepth === depth ? 'transparent' : '#E2E8F0'}`,
-                                        boxShadow: answerDepth === depth ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none',
-                                    }}
-                                >
-                                    {depth}
-                                </button>
+                        <div className="flex justify-between mt-1.5">
+                            {DIFFICULTY_LABELS.map((l, i) => (
+                                <span key={i} className="text-[9px] font-medium"
+                                    style={{ color: settings.difficulty === i + 1 ? '#6366F1' : '#CBD5E1' }}>
+                                    {l}
+                                </span>
                             ))}
                         </div>
-                        <p className="text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
-                            {answerDepth === 'brief'
-                                ? '⚡ Quick, concise answers (2-3 bullet points)'
-                                : answerDepth === 'moderate'
-                                    ? '📖 Balanced explanations (3-4 bullet points)'
-                                    : '📚 Comprehensive deep-dives (5-6 bullet points with examples)'}
-                        </p>
                     </div>
 
-                    {/* Pro tip */}
-                    <div className="p-4 rounded-xl" style={{ background: '#EEF2FF', border: '1px solid #C7D2FE' }}>
-                        <p className="text-xs leading-relaxed" style={{ color: '#4338CA' }}>
-                            💡 <strong>Pro tip:</strong> Set difficulty to 7+ and answers will include new terms you haven't explored yet, encouraging deeper discovery!
-                        </p>
+                    {/* ─── Technicality ─── */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm">🔧</span>
+                                <label className="text-xs font-bold uppercase tracking-wider" style={{ color: '#475569' }}>
+                                    Technicality
+                                </label>
+                            </div>
+                            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full"
+                                style={{ background: '#F5F3FF', color: '#8B5CF6' }}>
+                                {TECH_LABELS[settings.technicality - 1] || 'Intermediate'}
+                            </span>
+                        </div>
+                        <input
+                            type="range"
+                            min={1} max={5} step={1}
+                            value={settings.technicality}
+                            onChange={e => update({ technicality: +e.target.value })}
+                            className="premium-slider"
+                            style={{ backgroundSize: `${((settings.technicality - 1) / 4) * 100}% 100%` }}
+                        />
+                        <div className="flex justify-between mt-1.5">
+                            {TECH_LABELS.map((l, i) => (
+                                <span key={i} className="text-[9px] font-medium"
+                                    style={{ color: settings.technicality === i + 1 ? '#8B5CF6' : '#CBD5E1' }}>
+                                    {l}
+                                </span>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Apply Button */}
-                    <button
-                        onClick={onClose}
-                        className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
-                        style={{
-                            background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
-                            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
-                        }}
-                    >
-                        Apply Settings
+                    {/* ─── Answer Depth ─── */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-sm">📏</span>
+                            <label className="text-xs font-bold uppercase tracking-wider" style={{ color: '#475569' }}>
+                                Answer Depth
+                            </label>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            {DEPTH_OPTIONS.map(opt => {
+                                const isActive = settings.answerDepth === opt.value;
+                                return (
+                                    <button key={opt.value}
+                                        onClick={() => update({ answerDepth: opt.value })}
+                                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl text-center transition-all"
+                                        style={{
+                                            background: isActive ? '#EEF2FF' : '#F8FAFC',
+                                            border: `1.5px solid ${isActive ? '#6366F1' : '#E2E8F0'}`,
+                                            color: isActive ? '#4338CA' : '#64748B',
+                                            boxShadow: isActive ? '0 0 0 3px rgba(99,102,241,0.1)' : 'none',
+                                        }}
+                                    >
+                                        <span className="text-lg">{opt.icon}</span>
+                                        <span className="text-xs font-bold">{opt.label}</span>
+                                        <span className="text-[9px]" style={{ color: isActive ? '#6366F1' : '#94A3B8' }}>
+                                            {opt.description}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* ─── Current Config Summary ─── */}
+                    <div className="p-4 rounded-xl" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                        <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#94A3B8' }}>
+                            Current Configuration
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs" style={{ color: '#64748B' }}>AI Response Style</span>
+                                <span className="text-xs font-semibold" style={{ color: '#475569' }}>
+                                    {settings.difficulty >= 4 ? 'Expert, ' : settings.difficulty >= 2 ? 'Approachable, ' : 'Beginner-friendly, '}
+                                    {settings.answerDepth}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs" style={{ color: '#64748B' }}>Vocabulary Level</span>
+                                <span className="text-xs font-semibold" style={{ color: '#475569' }}>
+                                    {TECH_LABELS[settings.technicality - 1]}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Save button */}
+                    <button onClick={onClose} className="btn-primary w-full py-3">
+                        Save & Close
                     </button>
                 </div>
             </div>

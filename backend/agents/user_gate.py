@@ -41,11 +41,18 @@ def user_gate_node(state: AlfredState) -> dict:
     child_terms = [c.get("term", "") for c in concepts if isinstance(c, dict)]
 
     if term_key not in tree:
+        # Determine must_learn and relevance from concepts
+        concept_data = next(
+            (c for c in concepts if isinstance(c, dict) and c.get("term", "").lower() == term_key.lower()),
+            {}
+        )
         tree[term_key] = {
             "parent": parent,
             "answer": answer[:200],  # Truncate answer for tree storage
             "children": child_terms,
             "depth": depth,
+            "must_learn": concept_data.get("must_learn", False),
+            "relevance_score": concept_data.get("relevance_score", 0.5),
         }
     else:
         # Update children if re-visiting
