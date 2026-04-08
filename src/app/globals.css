@@ -21,6 +21,48 @@
   --border-medium: #CBD5E1;
   --border-focus: #6366F1;
 
+  /* ── Brand Colors ── */
+  --brand-primary: #6366F1;
+  --brand-secondary: #4F46E5;
+  --brand-tertiary: #818CF8;
+  --brand-gradient: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+  --brand-glow: rgba(99, 102, 241, 0.1);
+
+  /* ── Status Colors ── */
+  --success: #10B981;
+  --success-bg: #ECFDF5;
+  --danger: #EF4444;
+  --danger-bg: #FEF2F2;
+  --warning: #F59E0B;
+  --warning-bg: #FFFBEB;
+
+  /* ── Pill Colors ── */
+  --pill-green-bg: #D1FAE5;
+  --pill-green-border: #6EE7B7;
+  --pill-yellow-bg: #FEF3C7;
+  --pill-yellow-border: #FCD34D;
+  --pill-orange-bg: #FED7AA;
+  --pill-orange-border: #FDBA74;
+  --must-learn-bg: #FEE2E2;
+  --must-learn-border: #FECACA;
+  --must-learn-glow: 0 0 20px rgba(239, 68, 68, 0.2);
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-brand: 0 4px 12px rgba(99, 102, 241, 0.15);
+  --shadow-brand-lg: 0 12px 24px rgba(99, 102, 241, 0.25);
+
+  /* ── Timing ── */
+  --duration-fast: 0.15s;
+  --duration-normal: 0.3s;
+  --duration-slow: 0.5s;
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
   /* ── Radii ── */
   --radius-sm: 8px;
   --radius-md: 12px;
