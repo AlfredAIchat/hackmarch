@@ -47,9 +47,9 @@ EOF
 ```
 
 ## Available Groq Models
-- `mixtral-8x7b-32768` (default) - Fast and capable, 32k context
-- `llama2-70b-4096` - Powerful, 4k context
-- `gemma-7b-it` - Fast and lightweight
+- `llama-3.1-70b-versatile` (default) - Latest, most capable
+- `llama-3.1-8b-instant` - Fast and lightweight
+- `gemma-7b-it` - Good alternative
 
 Full list: https://console.groq.com/docs/models
 

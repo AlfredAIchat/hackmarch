@@ -78,7 +78,7 @@ def chat(messages: list[dict], temperature: float = 0.3, model: str = None) -> s
     # Auto-select default model based on provider
     if model is None:
         if provider == "groq":
-            model = "mixtral-8x7b-32768"  # Fast and capable
+            model = "llama-3.1-70b-versatile"  # Mixtral was decommissioned, using Llama 3.1 instead
         elif provider == "together":
             model = "meta-llama/Llama-2-70b-chat-hf"
         else:
