@@ -57,12 +57,16 @@ _agents_loaded = False
 _agents = {}
 
 def _load_agents():
-    """Lazy-load agent modules only when first needed."""
+    """Lazy-load agent modules only when first needed. Returns True if successful."""
     global _agents_loaded, _agents
     if _agents_loaded:
-        return
+        return True
     
     try:
+        # Ensure path is set for agent imports
+        if _project_root not in sys.path:
+            sys.path.insert(0, _project_root)
+        
         from backend.agents.intent_guard import intent_guard_node
         from backend.agents.answer_agent import answer_agent_node
         from backend.agents.hallucination_checker import hallucination_checker_node
@@ -92,9 +96,15 @@ def _load_agents():
             'chat': chat,
         }
         _agents_loaded = True
+        return True
+        
     except Exception as e:
         print(f"ERROR: Failed to load agents: {e}", file=sys.stderr)
-        raise
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        _agents_loaded = False
+        return False  # Don't raise - let endpoints handle it
+
 
 def _client_ip(req: Request) -> str:
     forwarded = req.headers.get("x-forwarded-for", "")
@@ -208,10 +218,8 @@ def _check_relatedness(query: str, state: dict) -> bool:
 @app.post("/session/start")
 async def start_session(req: StartRequest):
     # Load agents on first use
-    try:
-        _load_agents()
-    except Exception as e:
-        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    if not _load_agents():
+        raise HTTPException(503, "Agent system unavailable")
     
     session_id = req.session_id or str(uuid.uuid4())
     query = req.query.strip()
@@ -414,10 +422,8 @@ def _make_fresh_state(
 @app.post("/session/select-term")
 async def select_term(req: SelectTermRequest):
     # Load agents on first use
-    try:
-        _load_agents()
-    except Exception as e:
-        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    if not _load_agents():
+        raise HTTPException(503, "Agent system unavailable")
     
     if req.session_id not in sessions:
         raise HTTPException(404, "Session not found")
@@ -513,10 +519,8 @@ async def select_term(req: SelectTermRequest):
 @app.post("/session/quiz")
 async def trigger_quiz(req: dict):
     # Load agents on first use
-    try:
-        _load_agents()
-    except Exception as e:
-        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    if not _load_agents():
+        raise HTTPException(503, "Agent system unavailable")
     
     session_id = req.get("session_id", "")
     if session_id not in sessions:
@@ -565,10 +569,8 @@ async def upload_file(
 ):
     """Handle file upload — extract text, then run file_reader_agent to summarize."""
     # Load agents on first use
-    try:
-        _load_agents()
-    except Exception as e:
-        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    if not _load_agents():
+        raise HTTPException(503, "Agent system unavailable")
     
     content_bytes = await file.read()
     filename = file.filename or "unknown"
@@ -611,10 +613,8 @@ async def upload_file(
 @app.get("/session/report/{session_id}")
 async def get_report(session_id: str):
     # Load agents on first use
-    try:
-        _load_agents()
-    except Exception as e:
-        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    if not _load_agents():
+        raise HTTPException(503, "Agent system unavailable")
     
     if session_id not in sessions:
         raise HTTPException(404, "Session not found")
