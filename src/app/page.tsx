@@ -11,6 +11,7 @@ import PipelineView, { PipelineStep } from '@/components/PipelineView';
 import QuizModal from '@/components/QuizModal';
 import SettingsPanel from '@/components/SettingsPanel';
 import VoiceInput from '@/components/VoiceInput';
+import { motion } from 'framer-motion';
 
 /* ─────── Tab identifiers ─────── */
 type RightTab = 'tree' | 'pipeline';
@@ -459,51 +460,83 @@ export default function HomePage() {
                     }}>
                         {store.conversationMessages.length === 0 ? (
                             /* ── Empty state ── */
-                            <div style={{
+                            <motion.div 
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.8, ease: "easeOut" }}
+                                style={{
                                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                                 justifyContent: 'center', height: '100%', gap: '20px',
                             }}>
-                                <div style={{ position: 'relative' }}>
-                                    <div className="animate-float" style={{
-                                        width: '64px', height: '64px', borderRadius: '16px',
+                                <motion.div 
+                                    initial={{ scale: 0.8, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ duration: 0.6, delay: 0.1 }}
+                                    style={{ position: 'relative' }}
+                                >
+                                    <div style={{
+                                        width: '72px', height: '72px', borderRadius: '20px',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
-                                        boxShadow: '0 12px 40px rgba(99,102,241,0.3)',
+                                        background: 'linear-gradient(135deg, #0EA5A4, #2563EB)',
+                                        boxShadow: '0 16px 50px rgba(37,99,235,0.3)',
                                     }}>
-                                        <span style={{ fontSize: '28px', fontWeight: 900, color: '#fff' }}>A</span>
+                                        <span style={{ fontSize: '32px', fontWeight: 900, color: '#fff' }}>A</span>
                                     </div>
-                                </div>
-                                <div style={{ textAlign: 'center' }}>
-                                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                                </motion.div>
+                                <motion.div 
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.3 }}
+                                    style={{ textAlign: 'center' }}
+                                >
+                                    <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
                                         What would you like to learn?
                                     </h2>
-                                    <p style={{ fontSize: '13px', color: '#94A3B8', maxWidth: '380px', lineHeight: 1.5 }}>
+                                    <p style={{ fontSize: '15px', color: '#64748B', maxWidth: '420px', lineHeight: 1.6 }}>
                                         Ask any question and Alfred will break it down into explorable concepts,
                                         building a knowledge tree as you go deeper.
                                     </p>
-                                </div>
+                                </motion.div>
                                 {/* Quick starters */}
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center', maxWidth: '420px' }}>
+                                <motion.div 
+                                    initial="hidden"
+                                    animate="visible"
+                                    variants={{
+                                        hidden: { opacity: 0 },
+                                        visible: {
+                                            opacity: 1,
+                                            transition: { staggerChildren: 0.1, delayChildren: 0.5 }
+                                        }
+                                    }}
+                                    style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center', maxWidth: '480px', marginTop: '10px' }}
+                                >
                                     {[
                                         'How do neural networks learn?',
                                         'Explain quantum entanglement',
                                         'What is blockchain consensus?',
                                         'How does DNA replication work?',
-                                    ].map(q => (
-                                        <button key={q}
+                                    ].map((q) => (
+                                        <motion.button 
+                                            key={q}
+                                            variants={{
+                                                hidden: { opacity: 0, y: 10, scale: 0.95 },
+                                                visible: { opacity: 1, y: 0, scale: 1 }
+                                            }}
+                                            whileHover={{ scale: 1.05, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', color: '#1D4ED8' }}
+                                            whileTap={{ scale: 0.95 }}
                                             onClick={() => { setQuery(q); handleSubmit(q); }}
                                             style={{
-                                                padding: '8px 14px', borderRadius: '10px', fontSize: '11px',
-                                                fontWeight: 500, cursor: 'pointer', border: '1px solid #E2E8F0',
-                                                background: '#FAFBFD', color: '#64748B',
-                                                transition: 'all 0.15s ease',
+                                                padding: '10px 16px', borderRadius: '12px', fontSize: '13px',
+                                                fontWeight: 600, cursor: 'pointer', border: '1px solid #E2E8F0',
+                                                background: '#FFFFFF', color: '#64748B',
+                                                boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
                                             }}
                                         >
                                             {q}
-                                        </button>
+                                        </motion.button>
                                     ))}
-                                </div>
-                            </div>
+                                </motion.div>
+                            </motion.div>
                         ) : (
                             /* ── Messages ── */
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

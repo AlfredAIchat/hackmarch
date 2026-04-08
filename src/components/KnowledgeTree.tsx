@@ -201,22 +201,23 @@ export default function KnowledgeTree({ data, onNodeClick, className }: Props) {
     /* ─── Empty state ─── */
     if (!data || nodes.length === 0) {
         return (
-            <div className={`flex flex-col items-center justify-center h-full gap-4 ${className}`}>
-                <div className="empty-illustration">
-                    <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-                        <circle cx="60" cy="60" r="50" stroke="#E2E8F0" strokeWidth="2" strokeDasharray="6 4" />
-                        <circle cx="60" cy="35" r="8" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1.5" />
-                        <circle cx="38" cy="70" r="6" fill="#ECFDF5" stroke="#10B981" strokeWidth="1.5" />
-                        <circle cx="82" cy="70" r="6" fill="#FEF2F2" stroke="#EF4444" strokeWidth="1.5" />
+            <div className={`flex flex-col items-center justify-center h-full gap-5 ${className}`}>
+                <div className="relative flex items-center justify-center">
+                    <div className="absolute w-[180px] h-[180px] bg-blue-50/50 rounded-full blur-3xl" />
+                    <svg width="140" height="140" viewBox="0 0 120 120" fill="none" className="relative z-10 drop-shadow-xl animate-float">
+                        <circle cx="60" cy="60" r="50" stroke="#E2E8F0" strokeWidth="1.5" strokeDasharray="4 6" className="animate-spin-slow" style={{ transformOrigin: 'center' }} />
+                        <circle cx="60" cy="35" r="8" fill="#EFF6FF" stroke="#3B82F6" strokeWidth="2" className="animate-pulse" />
+                        <circle cx="38" cy="70" r="6" fill="#F0FDF4" stroke="#10B981" strokeWidth="2" />
+                        <circle cx="82" cy="70" r="6" fill="#FEF2F2" stroke="#EF4444" strokeWidth="2" />
                         <line x1="60" y1="43" x2="40" y2="64" stroke="#CBD5E1" strokeWidth="1.5" />
                         <line x1="60" y1="43" x2="80" y2="64" stroke="#CBD5E1" strokeWidth="1.5" />
-                        <circle cx="60" cy="90" r="4" fill="#FFFBEB" stroke="#F59E0B" strokeWidth="1" />
-                        <line x1="38" y1="76" x2="56" y2="86" stroke="#CBD5E1" strokeWidth="1" strokeDasharray="3 3" />
+                        <circle cx="60" cy="90" r="4" fill="#FFFBEB" stroke="#F59E0B" strokeWidth="2" />
+                        <line x1="38" y1="76" x2="56" y2="86" stroke="#E2E8F0" strokeWidth="1.5" strokeDasharray="3 3" />
                     </svg>
                 </div>
-                <div className="text-center">
-                    <p className="text-sm font-semibold" style={{ color: '#475569' }}>Knowledge Tree</p>
-                    <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>Ask a question to grow your tree</p>
+                <div className="text-center animate-slide-up mt-2">
+                    <p className="text-base font-bold text-slate-800">Knowledge Tree</p>
+                    <p className="text-sm font-medium mt-1.5 text-slate-400">Ask a question to grow your tree</p>
                 </div>
             </div>
         );
