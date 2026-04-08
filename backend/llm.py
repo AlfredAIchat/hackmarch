@@ -78,7 +78,8 @@ def chat(messages: list[dict], temperature: float = 0.3, model: str = None) -> s
     # Auto-select default model based on provider
     if model is None:
         if provider == "groq":
-            model = "llama-3.3-70b-specdec"  # Latest actively supported model (llama-3.1 is decommissioned)
+            # Use environment variable for Groq model (allows easy switching when models deprecate)
+            model = os.getenv("GROQ_MODEL", "qwen-qwq-32b")
         elif provider == "together":
             model = "meta-llama/Llama-2-70b-chat-hf"
         else:

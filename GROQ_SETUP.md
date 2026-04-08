@@ -47,11 +47,16 @@ EOF
 ```
 
 ## Available Groq Models
-- `llama-3.3-70b-specdec` (default) - Latest, most capable and actively supported
-- `llama-3.1-8b-instant` - Fast and lightweight (if still available)
-- `qwen-qwq-32b` - Alternative reasoning model
+- `qwen-qwq-32b` (default) - Reasoning-focused, currently stable
+- Check Groq console for latest available models: https://console.groq.com/
 
-**Note:** Groq frequently deprecates models. For the most current list, visit: https://console.groq.com/docs/models
+**⚠️ Note:** Groq deprecates models very frequently. To switch models easily without code changes, set the `GROQ_MODEL` environment variable:
+
+```
+GROQ_MODEL=qwen-qwq-32b  # or any other currently available model
+```
+
+This way, when Groq deprecates a model, you can just update the env var.
 
 ## How to Use in Code
 
