@@ -1,9 +1,5 @@
 @import "tailwindcss";
 
-/* ─────────────────────────────────────────────
-   Alfred AI — Premium Design System
-   ───────────────────────────────────────────── */
-
 :root {
   /* ── Core palette ── */
   --bg-primary: #F6F7FB;
