@@ -10,3 +10,4 @@ langgraph
 mistralai==2.3.1
 aiofiles
 httpx
+groq

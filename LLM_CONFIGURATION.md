@@ -1,6 +1,6 @@
 # Groq LLM Configuration
 
-This project uses **Groq** for LLM inference — completely free, no deposit required.
+This project uses **Groq** via its official Python SDK — completely free, no hassle.
 
 ## Setup
 
@@ -10,51 +10,67 @@ This project uses **Groq** for LLM inference — completely free, no deposit req
 3. Go to "API keys" section
 4. Create and copy your API key
 
-### 2. Set Environment Variables
+### 2. Set Environment Variable
 
-#### Local Development
-Add to `.env`:
+Add your API key to your environment:
+
+**Local Development** - Add to `.env`:
 ```
-GROQ_API_KEY=your_key_here
-GROQ_MODEL=qwen-qwq-32b
+GROQ_API_KEY=your_api_key_here
 ```
 
-#### Vercel Deployment
-Settings → Environment Variables:
-- `GROQ_API_KEY=<your_api_key>`
-- `GROQ_MODEL=qwen-qwq-32b`
+**Vercel Deployment** - Settings → Environment Variables:
+```
+GROQ_API_KEY=<your_api_key>
+```
 
-## Using in Code
+The Groq SDK automatically reads from `GROQ_API_KEY` environment variable.
 
-### Default Model (from GROQ_MODEL env var)
+## Usage
+
 ```python
 from backend.llm import chat
 
-messages = [{"role": "user", "content": "Hello"}]
+messages = [
+    {"role": "user", "content": "Hello, how are you?"}
+]
+
+# Use default model (Llama 4 Scout)
 response = chat(messages)
+
+# Or specify a different model
+response = chat(
+    messages,
+    model="llama-3.3-70b-specdec",
+    temperature=0.7
+)
+
+print(response)
 ```
 
-### Custom Model
-```python
-response = chat(messages, model="llama-3.3-70b-specdec")
-```
+## Available Models
 
-### Temperature Control
-```python
-response = chat(messages, temperature=0.7)
-```
-
-## Available Groq Models
-
-Check https://console.groq.com/ for current list. Popular models:
-- `qwen-qwq-32b` (default, reasoning-focused)
-- `llama-3.3-70b-specdec`
+Current popular Groq models:
+- `meta-llama/llama-4-scout-17b-16e-instruct` (default)
+- `meta-llama/llama-3.3-70b-specdec`
+- `qwen-qwq-32b`
 - `gemma-7b-it`
 
-**Note**: Groq deprecates models frequently. Set `GROQ_MODEL` env var to switch models without code changes.
+Check https://console.groq.com/docs/models for the latest list.
+
+## API Reference
+
+```python
+chat(messages, temperature=0.3, model="meta-llama/llama-4-scout-17b-16e-instruct")
+```
+
+- **messages** (list): Message dictionaries with `role` and `content`
+- **temperature** (float): Generation temperature, 0-2. Default: 0.3
+- **model** (str): Model ID to use. Default: Llama 4 Scout
 
 ## Support
 - Groq Docs: https://console.groq.com/docs
 - Groq Discord: https://discord.gg/groq
+
 
 
