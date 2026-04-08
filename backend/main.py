@@ -10,6 +10,7 @@ import uuid
 import asyncio
 import os
 import time
+import sys
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
@@ -20,6 +21,13 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Ensure absolute imports like `from backend...` work in serverless runtimes
+# that may execute this file with `backend/` as the working directory.
+_backend_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_backend_dir)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from backend.graph import compiled_graph, build_graph, memory
 from backend.agents.intent_guard import intent_guard_node
