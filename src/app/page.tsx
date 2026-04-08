@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
-import { useSessionStore, ConceptItem } from '@/store/sessionStore';
+import { useSessionStore, ConceptItem, PipelineNode } from '@/store/sessionStore';
 import { useUserStore } from '@/store/userStore';
 import { startSession, selectTerm, SSEEventHandler } from '@/lib/api';
 import KnowledgeTree, { TreeNode } from '@/components/KnowledgeTree';
@@ -18,9 +18,12 @@ type RightTab = 'tree' | 'pipeline';
 /* ─────── Tree adapter — converts store tree to component tree ─────── */
 function toTreeNode(data: any): TreeNode | null {
     if (!data) return null;
+    const cleanedLabel = String(data.name || 'Root')
+        .replace(/_[a-f0-9]{8}$/i, '')
+        .trim();
     return {
         id: data.name || 'root',
-        label: data.name || 'Root',
+        label: cleanedLabel || 'Root',
         status: data.must_learn ? 'must-learn' : data.depth === -1 ? 'active' :
             data.color === 'green' ? 'explored' : 'suggested',
         relevance: data.relevance_score || 0.5,
@@ -30,11 +33,12 @@ function toTreeNode(data: any): TreeNode | null {
 }
 
 /* ─────── Pipeline adapter ─────── */
-function toPipelineSteps(nodes: { id: string; label: string; status: string }[]): PipelineStep[] {
+function toPipelineSteps(nodes: PipelineNode[]): PipelineStep[] {
     return nodes.map(n => ({
         id: n.id,
         label: n.label,
         status: n.status === 'running' ? 'active' : n.status as PipelineStep['status'],
+        duration: n.duration,
     }));
 }
 
@@ -61,6 +65,7 @@ export default function HomePage() {
     const [showSettings, setShowSettings] = useState(false);
     const [showQuiz, setShowQuiz] = useState(false);
     const [showRightPanel, setShowRightPanel] = useState(false);
+    const [isCompact, setIsCompact] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -87,6 +92,22 @@ export default function HomePage() {
             inputRef.current?.focus();
         }
     }, [store.isProcessing, mounted]);
+
+    useEffect(() => {
+        if (!mounted) return;
+        const sync = () => {
+            const compact = window.innerWidth < 1120;
+            setIsCompact(compact);
+            if (compact) {
+                setShowRightPanel(false);
+            } else {
+                setShowRightPanel(true);
+            }
+        };
+        sync();
+        window.addEventListener('resize', sync);
+        return () => window.removeEventListener('resize', sync);
+    }, [mounted]);
 
     /* ─────── SSE Event Handler ─────── */
     const handleSSE: SSEEventHandler = useCallback((event: string, data: any) => {
@@ -289,6 +310,7 @@ export default function HomePage() {
     const treeNode = toTreeNode(store.treeData);
     const exploredConcepts = store.exploredTerms;
     const pipelineSteps = toPipelineSteps(store.pipelineNodes);
+    const activePipelineStep = store.pipelineNodes.find((n) => n.status === 'running');
     const isRateLimitError = (store.error || '').toLowerCase().includes('rate limit');
 
     return (
@@ -335,7 +357,7 @@ export default function HomePage() {
                 </div>
 
                 {/* Center stats */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
                         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: '#6366F1' }}>
                             D{store.currentDepth}
@@ -348,7 +370,9 @@ export default function HomePage() {
                     {store.isProcessing && (
                         <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <div className="pulse-dot" />
-                            <span style={{ fontSize: '10px', fontWeight: 600, color: '#6366F1' }}>Processing…</span>
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: '#6366F1', whiteSpace: 'nowrap' }}>
+                                {activePipelineStep ? `${activePipelineStep.label}...` : 'Processing...'}
+                            </span>
                         </div>
                     )}
                 </div>
@@ -366,7 +390,7 @@ export default function HomePage() {
                             transition: 'all 0.15s ease',
                         }}
                     >
-                        🌳 Tree
+                        {isCompact ? 'Panels' : 'Tree'}
                     </button>
                     <button
                         onClick={() => setShowQuiz(true)}
@@ -668,13 +692,19 @@ export default function HomePage() {
                 {/* ════ RIGHT PANEL: Tree / Pipeline (Toggleable) ════ */}
                 {showRightPanel && (
                     <div style={{
-                        width: '360px',
-                        maxWidth: '40vw',
+                        width: isCompact ? '100%' : 'clamp(340px, 34vw, 460px)',
+                        maxWidth: isCompact ? '100%' : '40vw',
                         flexShrink: 0,
                         display: 'flex',
                         flexDirection: 'column',
                         background: '#FFFFFF',
                         animation: 'slide-in-right 0.25s ease-out forwards',
+                        position: isCompact ? 'absolute' : 'relative',
+                        right: isCompact ? 0 : undefined,
+                        top: isCompact ? 52 : undefined,
+                        bottom: isCompact ? 0 : undefined,
+                        zIndex: isCompact ? 25 : undefined,
+                        boxShadow: isCompact ? '-16px 0 35px rgba(15,23,42,0.12)' : undefined,
                     }}>
                         {/* Tab bar */}
                         <div style={{

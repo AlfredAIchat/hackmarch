@@ -27,6 +27,8 @@ export interface PipelineNode {
     id: string;
     label: string;
     status: 'idle' | 'running' | 'done' | 'error';
+    startedAt?: number;
+    duration?: number;
 }
 
 export interface TimelineEntry {
@@ -131,6 +133,20 @@ interface SessionState {
 
 function buildTreeData(rawTree: Record<string, any>): TreeNodeData | null {
     if (!rawTree || Object.keys(rawTree).length === 0) return null;
+
+    // Support nested tree payloads ({ name, children: [...] }) in addition to adjacency maps.
+    if (typeof rawTree === 'object' && !Array.isArray(rawTree) && 'name' in rawTree && 'children' in rawTree) {
+        const normalize = (node: any): TreeNodeData => ({
+            name: node?.name || 'Node',
+            depth: node?.depth ?? 0,
+            answer: node?.answer || '',
+            color: node?.color || 'green',
+            must_learn: node?.must_learn || false,
+            relevance_score: node?.relevance_score || 0.5,
+            children: Array.isArray(node?.children) ? node.children.map(normalize) : [],
+        });
+        return normalize(rawTree);
+    }
 
     // Find root(s): nodes with no parent or parent not in tree
     const roots: string[] = [];
@@ -266,15 +282,44 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     },
 
     setPipelineNodeStatus: (id, status) => {
-        set((s) => ({
-            pipelineNodes: s.pipelineNodes.map((n) =>
-                n.id === id ? { ...n, status } : n
-            ),
-        }));
+        set((s) => {
+            const now = Date.now();
+            return {
+                pipelineNodes: s.pipelineNodes.map((n) => {
+                    if (n.id !== id) return n;
+
+                    if (status === 'running') {
+                        return {
+                            ...n,
+                            status,
+                            startedAt: n.startedAt || now,
+                            duration: n.duration,
+                        };
+                    }
+
+                    if ((status === 'done' || status === 'error') && n.startedAt) {
+                        return {
+                            ...n,
+                            status,
+                            duration: Math.max(0, now - n.startedAt),
+                        };
+                    }
+
+                    return { ...n, status };
+                }),
+            };
+        });
     },
 
     resetPipeline: () => {
-        set({ pipelineNodes: DEFAULT_PIPELINE.map(n => ({ ...n, status: 'idle' as const })) });
+        set({
+            pipelineNodes: DEFAULT_PIPELINE.map(n => ({
+                ...n,
+                status: 'idle' as const,
+                startedAt: undefined,
+                duration: undefined,
+            })),
+        });
     },
 
     updateTree: (rawTree) => {

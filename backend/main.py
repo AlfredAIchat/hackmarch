@@ -394,6 +394,14 @@ async def start_session(req: StartRequest):
             state.update(r)
             yield _sse_event("node_activated", {"node": "answer_agent", "status": "complete"})
 
+            # Emit answer immediately so UI is responsive while downstream nodes continue.
+            yield _sse_event("answer_ready", {
+                "answer": state.get("current_answer", ""),
+                "conversation_history": state.get("conversation_history", []),
+                "depth": state.get("current_depth", 0),
+                "is_continuation": is_continuation,
+            })
+
             # 4. Hallucination Checker & 5. Concept Extractor (in parallel)
             yield _sse_event("node_activated", {"node": "hallucination_checker", "status": "active"})
             yield _sse_event("node_activated", {"node": "concept_extractor", "status": "active"})
@@ -431,12 +439,6 @@ async def start_session(req: StartRequest):
             # Persist
             sessions[session_id] = dict(state)
 
-            yield _sse_event("answer_ready", {
-                "answer": state.get("current_answer", ""),
-                "conversation_history": state.get("conversation_history", []),
-                "depth": state.get("current_depth", 0),
-                "is_continuation": is_continuation,
-            })
             yield _sse_event("concepts_ready", {
                 "concepts": state.get("concepts", []),
             })
@@ -532,6 +534,12 @@ async def select_term(req: SelectTermRequest):
             state.update(r)
             yield _sse_event("node_activated", {"node": "answer_agent", "status": "complete"})
 
+            # Emit answer immediately so user sees response before remaining nodes complete.
+            yield _sse_event("answer_ready", {
+                "answer": state.get("current_answer", ""),
+                "depth": state.get("current_depth", 0),
+            })
+
             # 3. Hallucination Checker & 4. Concept Extractor (in parallel)
             yield _sse_event("node_activated", {"node": "hallucination_checker", "status": "active"})
             yield _sse_event("node_activated", {"node": "concept_extractor", "status": "active"})
@@ -568,10 +576,6 @@ async def select_term(req: SelectTermRequest):
             # Persist
             sessions[session_id] = dict(state)
 
-            yield _sse_event("answer_ready", {
-                "answer": state.get("current_answer", ""),
-                "depth": state.get("current_depth", 0),
-            })
             yield _sse_event("concepts_ready", {
                 "concepts": state.get("concepts", []),
             })
