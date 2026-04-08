@@ -1,6 +1,0 @@
-{
-  "runtime": "python3.11",
-  "handler": "index.app",
-  "launcherType": "ASGI",
-  "includeFiles": "../backend/**"
-}
