@@ -278,7 +278,7 @@ def _check_relatedness(query: str, state: dict) -> bool:
     )
 
     try:
-        result = chat(
+        result = _agents['chat'](
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
         )
@@ -536,8 +536,9 @@ async def select_term(req: SelectTermRequest):
             yield _sse_event("node_activated", {"node": "hallucination_checker", "status": "active"})
             yield _sse_event("node_activated", {"node": "concept_extractor", "status": "active"})
 
-            t1 = loop.run_in_executor(None, lambda: hallucination_checker_node(dict(state)))
-            t2 = loop.run_in_executor(None, lambda: concept_extractor_node(dict(state)))
+            # Copy state so concurrent nodes don't mutate the same dictionary during execution
+            t1 = loop.run_in_executor(None, lambda: _agents['hallucination_checker_node'](dict(state)))
+            t2 = loop.run_in_executor(None, lambda: _agents['concept_extractor_node'](dict(state)))
 
             r1, r2 = await asyncio.gather(t1, t2)
             state.update(r1)
@@ -548,13 +549,13 @@ async def select_term(req: SelectTermRequest):
 
             # 5. Concept Validator
             yield _sse_event("node_activated", {"node": "concept_validator", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: concept_validator_node(state))
+            r = await loop.run_in_executor(None, lambda: _agents['concept_validator_node'](state))
             state.update(r)
             yield _sse_event("node_activated", {"node": "concept_validator", "status": "complete"})
 
             # 6. User Gate (updates knowledge tree)
             yield _sse_event("node_activated", {"node": "user_gate", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: user_gate_node(state))
+            r = await loop.run_in_executor(None, lambda: _agents['user_gate_node'](state))
             state.update(r)
             yield _sse_event("node_activated", {"node": "user_gate", "status": "complete"})
 
@@ -623,7 +624,7 @@ async def submit_quiz(req: QuizSubmitRequest):
     state["quiz_answers"] = req.answers
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, lambda: answer_evaluator_node(state))
+    result = await loop.run_in_executor(None, lambda: _agents['answer_evaluator_node'](state))
     state.update(result)
     sessions[req.session_id] = state
 
@@ -659,7 +660,7 @@ async def upload_file(
         state = _make_fresh_state(session_id, query or f"Analyze {filename}")
 
     # Step 1: Extract raw text using file_reader_agent helper
-    extracted_text = extract_file_content(content_bytes, filename)
+    extracted_text = _agents['extract_file_content'](content_bytes, filename)
 
     # Step 2: Store raw text and run file_reader_agent to create summary
     state["file_context"] = extracted_text
@@ -706,13 +707,13 @@ async def get_report(session_id: str):
 
 @app.get("/health")
 async def health():
-    has_mistral_key = bool(os.getenv("MISTRAL_API_KEY", "").strip())
+    has_groq_key = bool(os.getenv("GROQ_API_KEY", "").strip())
     return {
         "status": "ok",
         "service": "Alfred AI Pipeline",
         "llm": {
-            "provider": "mistral",
-            "key_present": has_mistral_key,
+            "provider": "groq",
+            "key_present": has_groq_key,
         },
         "agents_loaded": _agents_loaded,
         "rate_limit": {
