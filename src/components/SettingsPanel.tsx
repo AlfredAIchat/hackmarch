@@ -30,26 +30,6 @@ export default function SettingsPanel({ settings, onUpdate, onClose }: Props) {
         onUpdate({ ...settings, ...partial });
     }, [settings, onUpdate]);
 
-    const applyPreset = (preset: 'easy' | 'balanced' | 'advanced') => {
-        switch (preset) {
-            case 'easy':
-                setDifficultyLevel(2);
-                setTechnicalityLevel(3);
-                setAnswerDepth('brief');
-                break;
-            case 'balanced':
-                setDifficultyLevel(5);
-                setTechnicalityLevel(5);
-                setAnswerDepth('moderate');
-                break;
-            case 'advanced':
-                setDifficultyLevel(8);
-                setTechnicalityLevel(8);
-                setAnswerDepth('detailed');
-                break;
-        }
-    };
-
     return (
         <div className="modal-backdrop" onClick={onClose}>
             <div className="relative w-full max-w-md mx-4 animate-scale-in"
