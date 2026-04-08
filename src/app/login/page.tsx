@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUserStore } from '@/store/userStore';
 import { gsap } from 'gsap';
+import { BrainCircuit, Zap, Network, ChevronRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -12,13 +14,9 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [mounted, setMounted] = useState(false);
 
-    const bgRef = useRef<HTMLDivElement>(null);
-    const textRef = useRef<HTMLDivElement>(null);
-    const heroRef = useRef<HTMLDivElement>(null);
-    const formRef = useRef<HTMLDivElement>(null);
-    
-    // Abstract elements for parallax
-    const floatersRef = useRef<(HTMLDivElement | null)[]>([]);
+    const mainRef = useRef<HTMLDivElement>(null);
+    const orb1Ref = useRef<HTMLDivElement>(null);
+    const orb2Ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         setMounted(true);
@@ -31,69 +29,54 @@ export default function LoginPage() {
         }
     }, [mounted, isLoggedIn, router]);
 
-    // Parallax GSAP animation
+    // Complex GSAP Parallax & Animation
     useEffect(() => {
-        if (!mounted || !bgRef.current) return;
+        if (!mounted || !mainRef.current || !orb1Ref.current || !orb2Ref.current) return;
         
-        let ctx = gsap.context(() => {
-            // Initial entrance
-            gsap.fromTo(heroRef.current, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 1.2, ease: "power4.out", delay: 0.1 });
-            gsap.fromTo(formRef.current, { y: 40, opacity: 0, scale: 0.95 }, { y: 0, opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.7)", delay: 0.3 });
-
-            // Animate abstract floaters
-            floatersRef.current.forEach((el, index) => {
-                if (el) {
-                    gsap.fromTo(el, 
-                        { opacity: 0, scale: 0.8 }, 
-                        { opacity: 1, scale: 1, duration: 2, ease: "power2.out", delay: index * 0.15 }
-                    );
-                    
-                    gsap.to(el, {
-                        y: "random(-20, 20)",
-                        x: "random(-20, 20)",
-                        rotation: "random(-15, 15)",
-                        duration: "random(4, 7)",
-                        repeat: -1,
-                        yoyo: true,
-                        ease: "sine.inOut"
-                    });
-                }
+        const ctx = gsap.context(() => {
+            // Background idle floating
+            gsap.to(orb1Ref.current, {
+                x: 'random(-50, 50)',
+                y: 'random(-50, 50)',
+                scale: 'random(0.9, 1.1)',
+                duration: 'random(4, 8)',
+                repeat: -1,
+                yoyo: true,
+                ease: 'sine.inOut'
+            });
+            gsap.to(orb2Ref.current, {
+                x: 'random(-50, 50)',
+                y: 'random(-50, 50)',
+                scale: 'random(0.9, 1.1)',
+                duration: 'random(4, 8)',
+                repeat: -1,
+                yoyo: true,
+                ease: 'sine.inOut',
+                delay: 2
             });
 
-            // Parallax on mouse move
+            // Smooth pointer tracking for parallax
             const handleMouseMove = (e: MouseEvent) => {
                 const x = (e.clientX / window.innerWidth - 0.5);
                 const y = (e.clientY / window.innerHeight - 0.5);
                 
-                floatersRef.current.forEach((el, i) => {
-                    if (el) {
-                        const depth = (i + 1) * 30; // parallax factor
-                        gsap.to(el, {
-                            x: -x * depth,
-                            y: -y * depth,
-                            duration: 1.5,
-                            ease: "power2.out"
-                        });
-                    }
+                gsap.to(orb1Ref.current, {
+                    x: -x * 80,
+                    y: -y * 80,
+                    duration: 2,
+                    ease: "power3.out"
                 });
-                
-                if (formRef.current) {
-                    gsap.to(formRef.current, {
-                        x: x * 10,
-                        y: y * 10,
-                        rotateY: x * 5,
-                        rotateX: -y * 5,
-                        duration: 1,
-                        ease: "power2.out"
-                    });
-                }
+                gsap.to(orb2Ref.current, {
+                    x: x * 100,
+                    y: y * 100,
+                    duration: 2,
+                    ease: "power3.out"
+                });
             };
 
             window.addEventListener('mousemove', handleMouseMove);
-            return () => {
-                window.removeEventListener('mousemove', handleMouseMove);
-            };
-        }, bgRef);
+            return () => window.removeEventListener('mousemove', handleMouseMove);
+        }, mainRef);
 
         return () => ctx.revert();
     }, [mounted]);
@@ -103,118 +86,186 @@ export default function LoginPage() {
         if (!name.trim()) return;
         setIsLoading(true);
         
-        // Exit animation
-        gsap.to(bgRef.current, { 
-            opacity: 0, 
-            scale: 1.05, 
-            duration: 0.8, 
-            ease: "power3.inOut", 
-            onComplete: () => {
-                const username = name.trim().toLowerCase().replace(/\s+/g, '_');
-                login(username, name.trim());
-                router.push('/');
-            }
-        });
+        // Page exit animation
+        if(mainRef.current) {
+            gsap.to(mainRef.current, {
+                opacity: 0,
+                y: -20,
+                duration: 0.6,
+                ease: "power3.inOut",
+                onComplete: () => {
+                    const username = name.trim().toLowerCase().replace(/\s+/g, '_');
+                    login(username, name.trim());
+                    router.push('/');
+                }
+            });
+        }
     };
 
     if (!mounted) return null;
 
     return (
-        <div ref={bgRef} className="min-h-screen w-full flex flex-col items-center justify-center bg-[#F8FAFC] text-slate-800 overflow-hidden relative perspective-1000">
+        <div ref={mainRef} className="min-h-screen relative w-full bg-[#FAFAFA] overflow-hidden selection:bg-blue-200 flex flex-col justify-between">
             
-            {/* GSAP Parallax Background Elements */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 flex items-center justify-center">
+            {/* --- Premium Grid Background & Parallax Orbs --- */}
+            <div className="absolute inset-0 z-0 pointer-events-none">
+                <div className="absolute inset-0" style={{ 
+                    backgroundImage: 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)', 
+                    backgroundSize: '40px 40px',
+                    maskImage: 'radial-gradient(ellipse at center, black 40%, transparent 80%)',
+                    WebkitMaskImage: 'radial-gradient(ellipse at center, black 40%, transparent 80%)',
+                    opacity: 0.4 
+                }} />
                 <div 
-                    ref={el => { floatersRef.current[0] = el; }} 
-                    className="absolute top-[10%] left-[10%] w-[40vw] h-[40vw] rounded-full mix-blend-multiply blur-3xl opacity-60 pointer-events-none"
-                    style={{ background: 'radial-gradient(circle, rgba(14,165,164,0.3), transparent 70%)' }} 
+                    ref={orb1Ref}
+                    className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full blur-[140px] opacity-20"
                 />
                 <div 
-                    ref={el => { floatersRef.current[1] = el; }} 
-                    className="absolute bottom-[10%] right-[10%] w-[45vw] h-[45vw] rounded-full mix-blend-multiply blur-3xl opacity-60 pointer-events-none"
-                    style={{ background: 'radial-gradient(circle, rgba(37,99,235,0.3), transparent 70%)' }} 
-                />
-                 <div 
-                    ref={el => { floatersRef.current[2] = el; }} 
-                    className="absolute top-[30%] right-[30%] w-[25vw] h-[25vw] rounded-full mix-blend-multiply blur-3xl opacity-50 pointer-events-none"
-                    style={{ background: 'radial-gradient(circle, rgba(192,132,252,0.3), transparent 70%)' }} 
+                    ref={orb2Ref}
+                    className="absolute bottom-[-20%] right-[-10%] w-[60vw] h-[60vw] bg-gradient-to-r from-teal-400 to-emerald-400 rounded-full blur-[140px] opacity-20"
                 />
             </div>
 
-            {/* Content Container */}
-            <div className="z-10 w-full max-w-7xl px-6 grid md:grid-cols-2 gap-12 lg:gap-20 items-center justify-between" style={{ transformStyle: 'preserve-3d' }}>
+            {/* --- Top Navigation --- */}
+            <nav className="relative z-50 w-full px-6 md:px-12 py-8 flex items-center justify-between">
+                <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    className="flex items-center gap-3"
+                >
+                    <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/30">
+                        <BrainCircuit className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="text-2xl font-extrabold tracking-tight text-slate-900">ALFRED</span>
+                </motion.div>
+                <motion.div 
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    className="hidden md:flex gap-8 text-sm font-bold text-slate-500"
+                >
+                    <span className="cursor-pointer hover:text-slate-900 transition-colors">Platform</span>
+                    <span className="cursor-pointer hover:text-slate-900 transition-colors">Methodology</span>
+                    <span className="cursor-pointer hover:text-slate-900 transition-colors">Pricing</span>
+                </motion.div>
+            </nav>
+
+            {/* --- Main Content Split --- */}
+            <main className="relative z-10 w-full max-w-[1400px] mx-auto px-6 md:px-12 my-auto grid lg:grid-cols-2 gap-16 lg:gap-8 items-center pb-20">
                 
-                {/* Left Side: Hero Message */}
-                <div ref={heroRef} className="flex flex-col justify-center max-md:text-center max-md:mt-16">
-                    <div className="inline-flex items-center space-x-3 mb-8 max-md:mx-auto">
-                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-2xl"
-                            style={{ background: 'linear-gradient(135deg, #0EA5A4, #2563EB)' }}>
-                            <span className="text-xl font-bold text-white">A</span>
-                        </div>
-                        <span className="text-lg font-bold tracking-widest text-[#0F172A] uppercase">Alfred AI</span>
+                {/* Left: Hero Copy & Product Selling Points */}
+                <motion.div 
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex flex-col max-lg:items-center max-lg:text-center mt-10 md:mt-0"
+                >
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 mb-8 max-lg:mx-auto">
+                        <Zap className="w-4 h-4 text-blue-600" fill="currentColor" />
+                        <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">Version 2.0 is Live</span>
                     </div>
 
-                    <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 text-[#0F172A] leading-[1.1]">
-                        Exploration, <br/>
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal-500">Accelerated.</span>
+                    <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-slate-900 tracking-tight leading-[1.05] mb-6">
+                        Learn anything,<br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500">
+                            Layer by layer.
+                        </span>
                     </h1>
-                    <p className="text-lg text-slate-500 max-w-xl md:leading-relaxed font-medium">
-                        World-class visual learning engine that reconstructs information layer by layer natively within your browser. 
+                    
+                    <p className="text-[17px] sm:text-xl text-slate-500 mb-12 max-w-[500px] leading-relaxed font-medium">
+                        Alfred is the world's first recursive learning engine. See how concepts connect naturally through interactive visual graphs instead of endless text.
                     </p>
-                </div>
 
-                {/* Right Side: Interactive Login Card */}
-                <div className="flex justify-center w-full" style={{ transformStyle: 'preserve-3d' }}>
-                    <div 
-                        ref={formRef} 
-                        className="w-full max-w-md bg-white/70 backdrop-blur-2xl p-10 lg:p-12 border border-white/80 rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.06)]"
-                    >
-                        <div className="mb-10 text-center">
-                            <h2 className="text-2xl font-bold text-[#0F172A]">Initialize Workspace</h2>
-                            <p className="text-sm text-slate-500 mt-3 font-medium">Personalized for a localized knowledge journey.</p>
+                    <div className="grid sm:grid-cols-2 gap-6 w-full max-w-lg max-lg:text-left">
+                        <div className="flex flex-col gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-slate-200 flex items-center justify-center shrink-0">
+                                <Network className="w-6 h-6 text-indigo-500" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-slate-900 mb-1">Visual Graphs</h3>
+                                <p className="text-sm text-slate-500 leading-normal font-medium">Watch ideas branch out dynamically as you ask targeted questions.</p>
+                            </div>
                         </div>
+                        <div className="flex flex-col gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-slate-200 flex items-center justify-center shrink-0">
+                                <BrainCircuit className="w-6 h-6 text-teal-500" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-slate-900 mb-1">Deep Recursion</h3>
+                                <p className="text-sm text-slate-500 leading-normal font-medium">Click any concept to zoom in and expand its fundamental layers.</p>
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+
+                {/* Right: The Login Form Card */}
+                <motion.div 
+                    initial={{ opacity: 0, x: 40, scale: 0.95 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                    className="w-full flex justify-center lg:justify-end"
+                >
+                    <div className="w-full max-w-[460px] bg-white/90 backdrop-blur-3xl p-8 sm:p-10 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-slate-100 relative">
+                        {/* Decorative top edge */}
+                        <div className="absolute top-0 left-0 right-0 h-[6px] bg-gradient-to-r from-blue-500 via-indigo-500 to-teal-400 rounded-t-[2rem]" />
                         
-                        <form onSubmit={handleSubmit} className="space-y-8 flex flex-col">
+                        <div className="mb-8 pt-2">
+                            <h2 className="text-[28px] font-black text-slate-900 tracking-tight">Initialize Workspace</h2>
+                            <p className="text-slate-500 text-[15px] mt-2 font-medium">Your progress is saved securely on your device.</p>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="space-y-3">
-                                <label className="block text-xs font-bold uppercase tracking-widest text-slate-400 pl-1">
+                                <label htmlFor="displayName" className="block text-[12px] font-black text-slate-400 uppercase tracking-widest pl-1">
                                     Display Name
                                 </label>
-                                <input
-                                    type="text"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    placeholder="e.g. Creator"
-                                    autoFocus
-                                    className="w-full px-6 py-5 bg-slate-50 border-2 border-slate-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-lg font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-300 placeholder:font-medium"
-                                    maxLength={40}
-                                />
+                                {/* Strictly controlled CSS to prevent overlap bugs */}
+                                <div className="relative block">
+                                    <input
+                                        id="displayName"
+                                        type="text"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        placeholder="e.g. John Doe"
+                                        className="block w-full h-[64px] px-5 bg-slate-50 text-slate-900 placeholder:text-slate-300 text-lg font-bold border-2 border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 max-h-[64px] overflow-hidden focus:bg-white transition-all shadow-inner"
+                                        maxLength={40}
+                                        required
+                                        autoComplete="off"
+                                    />
+                                </div>
                             </div>
 
                             <button
                                 type="submit"
                                 disabled={!name.trim() || isLoading}
-                                className="group relative w-full h-[64px] flex items-center justify-center rounded-2xl overflow-hidden transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 focus:outline-none"
+                                className="group relative block w-full h-[64px] bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-2xl font-bold text-[17px] transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98] outline-none focus:ring-4 focus:ring-slate-900/20 overflow-hidden"
                             >
-                                <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-teal-500" />
-                                <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-500 via-indigo-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-md" />
-                                <span className="relative text-white font-bold tracking-wide text-lg flex items-center">
+                                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+                                <span className="relative flex items-center justify-center gap-2 w-full h-full">
                                     {isLoading ? (
-                                        <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                     ) : (
                                         <>
                                             Enter Alfred
-                                            <svg className="w-5 h-5 ml-2 group-hover:translate-x-1.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                                            </svg>
+                                            <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                                         </>
                                     )}
                                 </span>
                             </button>
                         </form>
+                        
+                        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                                100% Local & Private Processing
+                            </p>
+                        </div>
                     </div>
-                </div>
-
-            </div>
+                </motion.div>
+            </main>
+            
+            {/* Added for spacing at bottom if needed */}
+            <div className="h-10"></div>
         </div>
     );
 }
