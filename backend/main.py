@@ -23,19 +23,30 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Ensure absolute imports like `from backend...` work in serverless runtimes.
-# Try multiple strategies to find project root.
-_backend_dir = os.path.dirname(os.path.abspath(__file__))  # /var/task/backend
-_project_root = os.path.dirname(_backend_dir)  # /var/task
-
-# If we ended up in wrong location (e.g., /var/backend instead of /var/task/backend),
-# try to find /var/task explicitly
-if not os.path.isdir(os.path.join(_project_root, "backend")):
-    # Check if /var/task exists and has backend
+# The backend directory might not be where we expect due to Vercel's bundling.
+def _find_project_root():
+    """Find the project root by searching for a directory containing 'backend'."""
+    # Try __file__ based calculation first
+    try:
+        _backend_dir = os.path.dirname(os.path.abspath(__file__))
+        _candidate = os.path.dirname(_backend_dir)
+        if os.path.isdir(os.path.join(_candidate, "backend")):
+            return _candidate
+    except Exception:
+        pass
+    
+    # Try /var/task (Vercel serverless root)
     if os.path.isdir("/var/task/backend"):
-        _project_root = "/var/task"
-    # Otherwise check os.getcwd()
-    elif os.path.isdir(os.path.join(os.getcwd(), "backend")):
-        _project_root = os.getcwd()
+        return "/var/task"
+    
+    # Try current working directory
+    if os.path.isdir(os.path.join(os.getcwd(), "backend")):
+        return os.getcwd()
+    
+    # Fallback to parent of current file's directory
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+_project_root = _find_project_root()
 
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
@@ -82,12 +93,17 @@ def _load_agents():
         print(f"DEBUG: Python path: {sys.path[:3]}", file=sys.stderr)
         print(f"DEBUG: CWD: {os.getcwd()}", file=sys.stderr)
         
-        # DEBUG: Check if backend directory exists
+        # DEBUG: Check if backend directory exists with new path
         backend_check = os.path.join(_project_root, "backend")
+        print(f"DEBUG: Project root: {_project_root}", file=sys.stderr)
         print(f"DEBUG: Checking for backend at: {backend_check}", file=sys.stderr)
         print(f"DEBUG: Backend exists: {os.path.isdir(backend_check)}", file=sys.stderr)
         if os.path.isdir(backend_check):
-            print(f"DEBUG: Backend contents: {os.listdir(backend_check)[:5]}", file=sys.stderr)
+            agents_dir = os.path.join(backend_check, "agents")
+            print(f"DEBUG: Agents dir: {agents_dir}", file=sys.stderr)
+            print(f"DEBUG: Agents dir exists: {os.path.isdir(agents_dir)}", file=sys.stderr)
+            if os.path.isdir(agents_dir):
+                print(f"DEBUG: Agents available: {os.listdir(agents_dir)[:5]}", file=sys.stderr)
         
         # Try direct import of backend to verify it's findable
         try:
