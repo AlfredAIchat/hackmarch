@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+/* ╔════════════════════════════════════════════════════════════════╗ */
+/* ║  IMMEDIATE STYLE FIX - TEST THAT CSS LOADS                   ║ */
+/* ╚════════════════════════════════════════════════════════════════╝ */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 50%, #faf5ff 100%) !important;
+  font-family: 'Manrope', -apple-system, sans-serif;
+  color: #1f2937;
+  min-height: 100vh;
+}
+
+a {
+  color: #6366f1;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: 'Manrope', -apple-system, sans-serif;
+}
+
+input, textarea, select {
+  font-family: 'Manrope', -apple-system, sans-serif;
+}
+
 :root {
   /* ── Core palette ── */
   --bg-primary: #F6F7FB;
