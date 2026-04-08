@@ -138,7 +138,8 @@ def _chat_groq(messages: list[dict], temperature: float, model: str) -> str:
                 if resp.status_code in (429, 500, 502, 503):
                     if attempt < max_retries - 1:
                         wait_time = base_delay * (2 ** attempt)
-                        print(f"⚠️ Groq {"rate limited" if resp.status_code == 429 else "temporarily unavailable"} ({resp.status_code}). Retrying in {wait_time}s...")
+                        status_text = 'rate limited' if resp.status_code == 429 else 'temporarily unavailable'
+                        print(f"⚠️ Groq {status_text} ({resp.status_code}). Retrying in {wait_time}s...")
                         time.sleep(wait_time)
                         continue
                     else:
