@@ -22,10 +22,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Ensure absolute imports like `from backend...` work in serverless runtimes
-# that may execute this file with `backend/` as the working directory.
-_backend_dir = os.path.dirname(os.path.abspath(__file__))
-_project_root = os.path.dirname(_backend_dir)
+# Ensure absolute imports like `from backend...` work in serverless runtimes.
+# Try multiple strategies to find project root.
+_backend_dir = os.path.dirname(os.path.abspath(__file__))  # /var/task/backend
+_project_root = os.path.dirname(_backend_dir)  # /var/task
+
+# If we ended up in wrong location (e.g., /var/backend instead of /var/task/backend),
+# try to find /var/task explicitly
+if not os.path.isdir(os.path.join(_project_root, "backend")):
+    # Check if /var/task exists and has backend
+    if os.path.isdir("/var/task/backend"):
+        _project_root = "/var/task"
+    # Otherwise check os.getcwd()
+    elif os.path.isdir(os.path.join(os.getcwd(), "backend")):
+        _project_root = os.getcwd()
+
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
