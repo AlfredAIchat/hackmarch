@@ -1,9 +1,7 @@
 {
   "experimentalServices": {
     "web": {
-      "framework": {
-        "slug": "nextjs"
-      }
+      "framework": "nextjs"
     }
   },
   "functions": {
