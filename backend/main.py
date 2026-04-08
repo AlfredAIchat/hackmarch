@@ -67,70 +67,65 @@ def _load_agents():
         if _project_root not in sys.path:
             sys.path.insert(0, _project_root)
         
-        # Import with detailed logging
-        print(f"DEBUG: Loading agents from: {_project_root}", file=sys.stderr)
+        print(f"DEBUG: Attempting to load agents...", file=sys.stderr)
+        print(f"DEBUG: Python path: {sys.path[:3]}", file=sys.stderr)
+        print(f"DEBUG: CWD: {os.getcwd()}", file=sys.stderr)
         
-        from backend.agents.intent_guard import intent_guard_node
-        print(f"✓ intent_guard loaded", file=sys.stderr)
+        # Load with individual try/catch for each agent
+        agents_to_load = [
+            ("intent_guard", "backend.agents.intent_guard", "intent_guard_node"),
+            ("answer_agent", "backend.agents.answer_agent", "answer_agent_node"),
+            ("hallucination_checker", "backend.agents.hallucination_checker", "hallucination_checker_node"),
+            ("concept_extractor", "backend.agents.concept_extractor", "concept_extractor_node"),
+            ("concept_validator", "backend.agents.concept_validator", "concept_validator_node"),
+            ("context_builder", "backend.agents.context_builder", "context_builder_node"),
+            ("user_gate", "backend.agents.user_gate", "user_gate_node"),
+            ("quiz_agent", "backend.agents.quiz_agent", "quiz_agent_node"),
+            ("answer_evaluator", "backend.agents.answer_evaluator", "answer_evaluator_node"),
+            ("report_agent", "backend.agents.report_agent", "report_agent_node"),
+            ("file_reader_agent", "backend.agents.file_reader_agent", ["file_reader_agent_node", "extract_file_content"]),
+        ]
         
-        from backend.agents.answer_agent import answer_agent_node
-        print(f"✓ answer_agent loaded", file=sys.stderr)
+        loaded_count = 0
+        for name, module_path, exports in agents_to_load:
+            try:
+                if isinstance(exports, list):
+                    # Multiple exports
+                    module = __import__(module_path, fromlist=exports)
+                    for export in exports:
+                        _agents[export] = getattr(module, export)
+                else:
+                    # Single export
+                    module = __import__(module_path, fromlist=[exports])
+                    _agents[exports] = getattr(module, exports)
+                print(f"✓ {name} loaded", file=sys.stderr)
+                loaded_count += 1
+            except Exception as e:
+                print(f"✗ {name} failed: {e}", file=sys.stderr)
+                # Log but don't fail - continue loading other agents
         
-        from backend.agents.hallucination_checker import hallucination_checker_node
-        print(f"✓ hallucination_checker loaded", file=sys.stderr)
+        # Try to load LLM
+        try:
+            from backend.llm import chat
+            _agents['chat'] = chat
+            print(f"✓ llm/chat loaded", file=sys.stderr)
+            loaded_count += 1
+        except Exception as e:
+            print(f"✗ llm/chat failed: {e}", file=sys.stderr)
         
-        from backend.agents.concept_extractor import concept_extractor_node
-        print(f"✓ concept_extractor loaded", file=sys.stderr)
-        
-        from backend.agents.concept_validator import concept_validator_node
-        print(f"✓ concept_validator loaded", file=sys.stderr)
-        
-        from backend.agents.context_builder import context_builder_node
-        print(f"✓ context_builder loaded", file=sys.stderr)
-        
-        from backend.agents.user_gate import user_gate_node
-        print(f"✓ user_gate loaded", file=sys.stderr)
-        
-        from backend.agents.quiz_agent import quiz_agent_node
-        print(f"✓ quiz_agent loaded", file=sys.stderr)
-        
-        from backend.agents.answer_evaluator import answer_evaluator_node
-        print(f"✓ answer_evaluator loaded", file=sys.stderr)
-        
-        from backend.agents.report_agent import report_agent_node
-        print(f"✓ report_agent loaded", file=sys.stderr)
-        
-        from backend.agents.file_reader_agent import file_reader_agent_node, extract_file_content
-        print(f"✓ file_reader_agent loaded", file=sys.stderr)
-        
-        from backend.llm import chat
-        print(f"✓ chat/llm loaded", file=sys.stderr)
-        
-        _agents = {
-            'intent_guard_node': intent_guard_node,
-            'answer_agent_node': answer_agent_node,
-            'hallucination_checker_node': hallucination_checker_node,
-            'concept_extractor_node': concept_extractor_node,
-            'concept_validator_node': concept_validator_node,
-            'context_builder_node': context_builder_node,
-            'user_gate_node': user_gate_node,
-            'quiz_agent_node': quiz_agent_node,
-            'answer_evaluator_node': answer_evaluator_node,
-            'report_agent_node': report_agent_node,
-            'file_reader_agent_node': file_reader_agent_node,
-            'extract_file_content': extract_file_content,
-            'chat': chat,
-        }
-        _agents_loaded = True
-        print(f"✓ ALL AGENTS LOADED SUCCESSFULLY", file=sys.stderr)
-        return True
+        if loaded_count > 0:
+            _agents_loaded = True
+            print(f"✓ Loaded {loaded_count} modules successfully", file=sys.stderr)
+            return True
+        else:
+            print(f"✗ No agents loaded!", file=sys.stderr)
+            return False
         
     except Exception as e:
-        print(f"✗ ERROR: Failed to load agents: {e}", file=sys.stderr)
+        print(f"✗ FATAL: Agent loading system failed: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc(file=sys.stderr)
-        _agents_loaded = False
-        return False  # Don't raise - let endpoints handle it
+        return False
 
 
 def _client_ip(req: Request) -> str:
