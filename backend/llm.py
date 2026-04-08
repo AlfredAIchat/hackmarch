@@ -1,7 +1,6 @@
 """
-LLM client helper — supports Together.ai (free), NVIDIA, and Mistral.
-Default: Together.ai (free tier, no rate limits)
-Fallback: Mistral or NVIDIA
+LLM client helper — supports Groq (free, fastest), Together.ai, and Mistral.
+Default: Groq (completely free, fastest LLM inference)
 """
 
 from __future__ import annotations
@@ -19,14 +18,7 @@ load_dotenv(os.path.join(_backend_dir, ".env"))
 load_dotenv(os.path.join(_backend_dir, "..", ".env.local"))
 
 # Determine which LLM provider to use
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "together").lower()  # "together", "nvidia", or "mistral"
-
-# Together.ai client (lazy loaded)
-try:
-    import httpx
-    _together_client: Optional[httpx.Client] = None
-except ImportError:
-    _together_client = None
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()  # "groq", "together", or "mistral"
 
 # Mistral API client (lazy loaded)
 try:
@@ -36,12 +28,23 @@ except ImportError:
     _mistral_client = None
 
 
+def get_groq_api_key() -> str:
+    """Get Groq API key from environment."""
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY is missing. Get free access at https://console.groq.com/ "
+            "and set GROQ_API_KEY in environment variables."
+        )
+    return api_key
+
+
 def get_together_api_key() -> str:
     """Get Together.ai API key from environment."""
     api_key = os.getenv("TOGETHER_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError(
-            "TOGETHER_API_KEY is missing. Get free access at https://www.together.ai/ "
+            "TOGETHER_API_KEY is missing. Get access at https://www.together.ai/ "
             "and set TOGETHER_API_KEY in environment variables."
         )
     return api_key
@@ -63,7 +66,7 @@ def get_mistral_client() -> object:
 def chat(messages: list[dict], temperature: float = 0.3, model: str = None) -> str:
     """
     Convenience wrapper: returns the assistant content string.
-    Supports Together.ai (free, recommended), NVIDIA, and Mistral APIs.
+    Supports Groq (free, fastest), Together.ai, and Mistral APIs.
     
     Args:
         messages: List of message dicts with 'role' and 'content'
@@ -74,25 +77,90 @@ def chat(messages: list[dict], temperature: float = 0.3, model: str = None) -> s
     
     # Auto-select default model based on provider
     if model is None:
-        if provider == "together":
+        if provider == "groq":
+            model = "mixtral-8x7b-32768"  # Fast and capable
+        elif provider == "together":
             model = "meta-llama/Llama-2-70b-chat-hf"
-        elif provider == "nvidia":
-            model = "meta/llama2-70b"
         else:
             model = "mistral-small-latest"
     
-    if provider == "together":
+    if provider == "groq":
+        return _chat_groq(messages, temperature, model)
+    elif provider == "together":
         return _chat_together(messages, temperature, model)
-    elif provider == "nvidia":
-        return _chat_nvidia(messages, temperature, model)
     elif provider == "mistral":
         return _chat_mistral(messages, temperature, model)
     else:
-        raise RuntimeError(f"Unknown LLM_PROVIDER: {provider}. Use 'together', 'nvidia', or 'mistral'.")
+        raise RuntimeError(f"Unknown LLM_PROVIDER: {provider}. Use 'groq', 'together', or 'mistral'.")
+
+
+def _chat_groq(messages: list[dict], temperature: float, model: str) -> str:
+    """Call Groq API (free, fastest)."""
+    import httpx
+    
+    api_key = get_groq_api_key()
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": 1024,
+    }
+    
+    max_retries = 3
+    base_delay = 2
+    
+    for attempt in range(max_retries):
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                resp = client.post(url, headers=headers, json=payload)
+                
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"].strip()
+                
+                error_msg = resp.text
+                
+                # Handle auth errors
+                if resp.status_code == 401:
+                    raise RuntimeError(
+                        f"Groq authentication failed (401). "
+                        f"Get free API key at https://console.groq.com/"
+                    )
+                
+                # Handle rate limits with retry
+                if resp.status_code in (429, 500, 502, 503):
+                    if attempt < max_retries - 1:
+                        wait_time = base_delay * (2 ** attempt)
+                        print(f"⚠️ Groq {"rate limited" if resp.status_code == 429 else "temporarily unavailable"} ({resp.status_code}). Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"Groq API error ({resp.status_code}). Please try again in a moment."
+                        )
+                
+                raise RuntimeError(f"Groq API error ({resp.status_code}): {error_msg}")
+        
+        except httpx.RequestError as e:
+            if attempt < max_retries - 1:
+                wait_time = base_delay * (2 ** attempt)
+                print(f"⚠️ Connection error. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            raise RuntimeError(f"Groq request failed: {str(e)}") from e
+    
+    raise RuntimeError("Max retries exceeded")
 
 
 def _chat_together(messages: list[dict], temperature: float, model: str) -> str:
-    """Call Together.ai API (free, recommended)."""
+    """Call Together.ai API (requires deposit)."""
     import httpx
     
     api_key = get_together_api_key()
@@ -129,7 +197,7 @@ def _chat_together(messages: list[dict], temperature: float, model: str) -> str:
                 if resp.status_code == 401:
                     raise RuntimeError(
                         f"Together.ai authentication failed (401). "
-                        f"Get free API key at https://www.together.ai/"
+                        f"Check your API key at https://www.together.ai/"
                     )
                 
                 # Handle rate limits with retry
@@ -141,8 +209,7 @@ def _chat_together(messages: list[dict], temperature: float, model: str) -> str:
                         continue
                     else:
                         raise RuntimeError(
-                            f"Together.ai rate limited ({resp.status_code}). "
-                            f"Please try again in a few minutes."
+                            f"Together.ai rate limited ({resp.status_code}). Please try again in a few minutes."
                         )
                 
                 raise RuntimeError(f"Together.ai API error ({resp.status_code}): {error_msg}")
@@ -156,14 +223,6 @@ def _chat_together(messages: list[dict], temperature: float, model: str) -> str:
             raise RuntimeError(f"Together.ai request failed: {str(e)}") from e
     
     raise RuntimeError("Max retries exceeded")
-
-
-def _chat_nvidia(messages: list[dict], temperature: float, model: str) -> str:
-    """Call NVIDIA API (requires correct endpoint - currently not working)."""
-    raise RuntimeError(
-        "NVIDIA API endpoint not configured correctly. Use Together.ai instead. "
-        "Set LLM_PROVIDER=together and TOGETHER_API_KEY."
-    )
 
 
 def _chat_mistral(messages: list[dict], temperature: float, model: str) -> str:
