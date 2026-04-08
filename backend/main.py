@@ -9,10 +9,12 @@ import json
 import uuid
 import asyncio
 import os
+import time
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -50,6 +52,49 @@ app.add_middleware(
 
 # In-memory session store for state snapshots
 sessions: dict[str, dict[str, Any]] = {}
+
+# Simple per-IP rolling-window limiter to protect Mistral usage.
+RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "25"))
+RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+_rate_limit_buckets: dict[str, list[float]] = {}
+
+
+def _client_ip(req: Request) -> str:
+    forwarded = req.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if req.client and req.client.host:
+        return req.client.host
+    return "unknown"
+
+
+@app.middleware("http")
+async def rate_limit_middleware(req: Request, call_next):
+    # Limit expensive backend endpoints only.
+    if req.method == "POST" and req.url.path.startswith("/session/"):
+        now = time.time()
+        ip = _client_ip(req)
+        bucket = _rate_limit_buckets.get(ip, [])
+        cutoff = now - RATE_LIMIT_WINDOW_SECONDS
+        bucket = [ts for ts in bucket if ts >= cutoff]
+
+        if len(bucket) >= RATE_LIMIT_MAX_REQUESTS:
+            retry_after = max(1, int(RATE_LIMIT_WINDOW_SECONDS - (now - bucket[0])))
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": (
+                        f"Rate limit exceeded. Max {RATE_LIMIT_MAX_REQUESTS} requests "
+                        f"per {RATE_LIMIT_WINDOW_SECONDS}s. Try again in {retry_after}s."
+                    )
+                },
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        bucket.append(now)
+        _rate_limit_buckets[ip] = bucket
+
+    return await call_next(req)
 
 
 class StartRequest(BaseModel):
@@ -526,4 +571,16 @@ async def get_report(session_id: str):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "Alfred AI Pipeline"}
+    has_mistral_key = bool(os.getenv("MISTRAL_API_KEY", "").strip())
+    return {
+        "status": "ok",
+        "service": "Alfred AI Pipeline",
+        "llm": {
+            "provider": "mistral",
+            "key_present": has_mistral_key,
+        },
+        "rate_limit": {
+            "max_requests": RATE_LIMIT_MAX_REQUESTS,
+            "window_seconds": RATE_LIMIT_WINDOW_SECONDS,
+        },
+    }
