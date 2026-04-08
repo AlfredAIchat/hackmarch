@@ -1,0 +1,18 @@
+# Force rebuild 2026-04-08T06:36:16+00:00
+
+This file triggers a Vercel rebuild to deploy the latest agent loading fixes.
+
+## Issue Fixed
+- ModuleNotFoundError: No module named 'backend' in Vercel serverless environment
+- Wrong project root detection (/var instead of /var/task)
+- Missing fallback for flattened file structure
+
+## Latest Commit
+6cb68e4 - Use .vc-config.json for Python function configuration and proper ASGI handler setup
+
+## Expected Result
+After this deployment, the backend should successfully load all agents using either:
+- backend.agents.* imports (if structure preserved)
+- agents.* imports (if structure flattened)
+
+Both scenarios are now handled gracefully.
