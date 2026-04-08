@@ -107,63 +107,98 @@ def _get_length_instruction(depth: int, answer_depth: str) -> str:
 
 
 def answer_agent_node(state: AlfredState) -> dict:
-    history = list(state.get("conversation_history", []))
-    query = state.get("user_query", "")
-    depth = state.get("current_depth", 0)
-    explored = state.get("explored_terms", [])
-    file_context = state.get("file_context", "")
+    """
+    Generate an answer to the user's query using LLM.
+    """
+    import sys
+    print(f"[answer_agent] Starting...", file=sys.stderr)
+    
+    try:
+        history = list(state.get("conversation_history", []))
+        query = state.get("user_query", "")
+        depth = state.get("current_depth", 0)
+        explored = state.get("explored_terms", [])
+        file_context = state.get("file_context", "")
 
-    # Get user preferences (with defaults)
-    difficulty_level = state.get("difficulty_level", 5)
-    technicality_level = state.get("technicality_level", 5)
-    answer_depth = state.get("answer_depth", "moderate")
+        print(f"[answer_agent] Query: {query[:100]}", file=sys.stderr)
+        print(f"[answer_agent] Depth: {depth}, History length: {len(history)}", file=sys.stderr)
 
-    # Build dynamic system prompt with all customizations
-    difficulty_rule = _get_difficulty_instruction(difficulty_level)
-    technicality_rule = _get_technicality_instruction(technicality_level)
-    length_rule = _get_length_instruction(depth, answer_depth)
+        # Get user preferences (with defaults)
+        difficulty_level = state.get("difficulty_level", 5)
+        technicality_level = state.get("technicality_level", 5)
+        answer_depth = state.get("answer_depth", "moderate")
 
-    system = (
-        f"{SYSTEM_PROMPT}\n\n"
-        f"DIFFICULTY LEVEL ({difficulty_level}/10): {difficulty_rule}\n\n"
-        f"TECHNICALITY LEVEL ({technicality_level}/10): {technicality_rule}\n\n"
-        f"LENGTH RULE: {length_rule}"
-    )
+        print(f"[answer_agent] Difficulty: {difficulty_level}, Technicality: {technicality_level}, Depth: {answer_depth}", file=sys.stderr)
 
-    messages = [{"role": "system", "content": system}]
+        # Build dynamic system prompt with all customizations
+        difficulty_rule = _get_difficulty_instruction(difficulty_level)
+        technicality_rule = _get_technicality_instruction(technicality_level)
+        length_rule = _get_length_instruction(depth, answer_depth)
 
-    # Include recent conversation history (last 3 exchanges)
-    messages.extend(history[-6:])
+        print(f"[answer_agent] Built instruction rules", file=sys.stderr)
 
-    # Build the user message
-    user_msg = query
-
-    # If there's file context, prepend it
-    if file_context:
-        user_msg = (
-            f"[UPLOADED FILE CONTENT — the user uploaded a file. Use this content to answer:\n"
-            f"{file_context[:4000]}\n"
-            f"--- END OF FILE ---]\n\n"
-            f"User's question: {query}"
+        system = (
+            f"{SYSTEM_PROMPT}\n\n"
+            f"DIFFICULTY LEVEL ({difficulty_level}/10): {difficulty_rule}\n\n"
+            f"TECHNICALITY LEVEL ({technicality_level}/10): {technicality_rule}\n\n"
+            f"LENGTH RULE: {length_rule}"
         )
 
-    if depth > 0 and explored:
-        user_msg += (
-            f"\n\n[Context: Depth {depth}. "
-            f"Previously explored: {', '.join(explored[-5:])}. "
-            f"Connect to what we discussed. {length_rule}]"
-        )
+        messages = [{"role": "system", "content": system}]
 
-    messages.append({"role": "user", "content": user_msg})
+        # Include recent conversation history (last 3 exchanges)
+        messages.extend(history[-6:])
 
-    answer = chat(messages=messages, temperature=0.5)
+        print(f"[answer_agent] Prepared {len(messages)} total messages", file=sys.stderr)
 
-    # Append to conversation history
-    updated_history = list(history)
-    updated_history.append({"role": "user", "content": query})
-    updated_history.append({"role": "assistant", "content": answer})
+        # Build the user message
+        user_msg = query
 
-    return {
-        "current_answer": answer,
-        "conversation_history": updated_history,
-    }
+        # If there's file context, prepend it
+        if file_context:
+            user_msg = (
+                f"[UPLOADED FILE CONTENT — the user uploaded a file. Use this content to answer:\n"
+                f"{file_context[:4000]}\n"
+                f"--- END OF FILE ---]\n\n"
+                f"User's question: {query}"
+            )
+            print(f"[answer_agent] Using file context ({len(file_context)} chars)", file=sys.stderr)
+
+        if depth > 0 and explored:
+            user_msg += (
+                f"\n\n[Context: Depth {depth}. "
+                f"Previously explored: {', '.join(explored[-5:])}. "
+                f"Connect to what we discussed. {length_rule}]"
+            )
+
+        messages.append({"role": "user", "content": user_msg})
+
+        print(f"[answer_agent] Calling LLM with {len(messages)} messages", file=sys.stderr)
+        
+        try:
+            answer = chat(messages=messages, temperature=0.5)
+            print(f"[answer_agent] LLM returned answer ({len(answer)} chars)", file=sys.stderr)
+        except Exception as e:
+            print(f"[answer_agent] ERROR in chat(): {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            raise
+
+        # Append to conversation history
+        updated_history = list(history)
+        updated_history.append({"role": "user", "content": query})
+        updated_history.append({"role": "assistant", "content": answer})
+
+        print(f"[answer_agent] Success! Returning answer", file=sys.stderr)
+        
+        return {
+            "current_answer": answer,
+            "conversation_history": updated_history,
+        }
+        
+    except Exception as e:
+        print(f"[answer_agent] FATAL ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        raise
+
