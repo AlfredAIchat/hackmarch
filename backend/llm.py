@@ -1,7 +1,7 @@
 """
-LLM client helper — supports both NVIDIA (free) and Mistral.
-Default: NVIDIA API (free tier)
-Fallback: Mistral (requires paid plan)
+LLM client helper — supports Together.ai (free), NVIDIA, and Mistral.
+Default: Together.ai (free tier, no rate limits)
+Fallback: Mistral or NVIDIA
 """
 
 from __future__ import annotations
@@ -19,14 +19,14 @@ load_dotenv(os.path.join(_backend_dir, ".env"))
 load_dotenv(os.path.join(_backend_dir, "..", ".env.local"))
 
 # Determine which LLM provider to use
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "nvidia").lower()  # "nvidia" or "mistral"
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "together").lower()  # "together", "nvidia", or "mistral"
 
-# NVIDIA API client (lazy loaded)
+# Together.ai client (lazy loaded)
 try:
     import httpx
-    _nvidia_client: Optional[httpx.AsyncClient] = None
+    _together_client: Optional[httpx.Client] = None
 except ImportError:
-    _nvidia_client = None
+    _together_client = None
 
 # Mistral API client (lazy loaded)
 try:
@@ -36,13 +36,13 @@ except ImportError:
     _mistral_client = None
 
 
-def get_nvidia_api_key() -> str:
-    """Get NVIDIA API key from environment."""
-    api_key = os.getenv("NVIDIA_API_KEY", "").strip()
+def get_together_api_key() -> str:
+    """Get Together.ai API key from environment."""
+    api_key = os.getenv("TOGETHER_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError(
-            "NVIDIA_API_KEY is missing. Get free access at https://build.nvidia.com/ "
-            "and set NVIDIA_API_KEY in environment variables."
+            "TOGETHER_API_KEY is missing. Get free access at https://www.together.ai/ "
+            "and set TOGETHER_API_KEY in environment variables."
         )
     return api_key
 
@@ -63,7 +63,7 @@ def get_mistral_client() -> object:
 def chat(messages: list[dict], temperature: float = 0.3, model: str = None) -> str:
     """
     Convenience wrapper: returns the assistant content string.
-    Supports both NVIDIA (free) and Mistral APIs with automatic retry logic.
+    Supports Together.ai (free, recommended), NVIDIA, and Mistral APIs.
     
     Args:
         messages: List of message dicts with 'role' and 'content'
@@ -74,23 +74,29 @@ def chat(messages: list[dict], temperature: float = 0.3, model: str = None) -> s
     
     # Auto-select default model based on provider
     if model is None:
-        model = "meta/llama2-70b" if provider == "nvidia" else "mistral-small-latest"
+        if provider == "together":
+            model = "meta-llama/Llama-2-70b-chat-hf"
+        elif provider == "nvidia":
+            model = "meta/llama2-70b"
+        else:
+            model = "mistral-small-latest"
     
-    if provider == "nvidia":
+    if provider == "together":
+        return _chat_together(messages, temperature, model)
+    elif provider == "nvidia":
         return _chat_nvidia(messages, temperature, model)
     elif provider == "mistral":
         return _chat_mistral(messages, temperature, model)
     else:
-        raise RuntimeError(f"Unknown LLM_PROVIDER: {provider}. Use 'nvidia' or 'mistral'.")
+        raise RuntimeError(f"Unknown LLM_PROVIDER: {provider}. Use 'together', 'nvidia', or 'mistral'.")
 
 
-def _chat_nvidia(messages: list[dict], temperature: float, model: str) -> str:
-    """Call NVIDIA API (free)."""
+def _chat_together(messages: list[dict], temperature: float, model: str) -> str:
+    """Call Together.ai API (free, recommended)."""
     import httpx
-    import json
     
-    api_key = get_nvidia_api_key()
-    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    api_key = get_together_api_key()
+    url = "https://api.together.xyz/v1/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -122,8 +128,8 @@ def _chat_nvidia(messages: list[dict], temperature: float, model: str) -> str:
                 # Handle auth errors
                 if resp.status_code == 401:
                     raise RuntimeError(
-                        f"NVIDIA API authentication failed (401). "
-                        f"Get free access at https://build.nvidia.com/"
+                        f"Together.ai authentication failed (401). "
+                        f"Get free API key at https://www.together.ai/"
                     )
                 
                 # Handle rate limits with retry
@@ -135,11 +141,11 @@ def _chat_nvidia(messages: list[dict], temperature: float, model: str) -> str:
                         continue
                     else:
                         raise RuntimeError(
-                            f"NVIDIA API rate limited ({resp.status_code}). "
+                            f"Together.ai rate limited ({resp.status_code}). "
                             f"Please try again in a few minutes."
                         )
                 
-                raise RuntimeError(f"NVIDIA API error ({resp.status_code}): {error_msg}")
+                raise RuntimeError(f"Together.ai API error ({resp.status_code}): {error_msg}")
         
         except httpx.RequestError as e:
             if attempt < max_retries - 1:
@@ -147,9 +153,17 @@ def _chat_nvidia(messages: list[dict], temperature: float, model: str) -> str:
                 print(f"⚠️ Connection error. Retrying in {wait_time}s...")
                 time.sleep(wait_time)
                 continue
-            raise RuntimeError(f"NVIDIA API request failed: {str(e)}") from e
+            raise RuntimeError(f"Together.ai request failed: {str(e)}") from e
     
     raise RuntimeError("Max retries exceeded")
+
+
+def _chat_nvidia(messages: list[dict], temperature: float, model: str) -> str:
+    """Call NVIDIA API (requires correct endpoint - currently not working)."""
+    raise RuntimeError(
+        "NVIDIA API endpoint not configured correctly. Use Together.ai instead. "
+        "Set LLM_PROVIDER=together and TOGETHER_API_KEY."
+    )
 
 
 def _chat_mistral(messages: list[dict], temperature: float, model: str) -> str:
