@@ -82,5 +82,10 @@ def build_graph() -> StateGraph:
 
 
 # Pre-compiled graph with checkpointer for session persistence
-memory = MemorySaver()
-compiled_graph = build_graph().compile(checkpointer=memory)
+try:
+    memory = MemorySaver()
+    compiled_graph = build_graph().compile(checkpointer=memory)
+except Exception as e:
+    import sys
+    print(f"Failed to compile LangGraph: {e}", file=sys.stderr)
+    raise
