@@ -81,9 +81,11 @@ def chat(messages: list[dict], temperature: float = 0.3, model: str = None) -> s
             # Use environment variable for Groq model (allows easy switching when models deprecate)
             model = os.getenv("GROQ_MODEL", "qwen-qwq-32b")
         elif provider == "together":
-            model = "meta-llama/Llama-2-70b-chat-hf"
-        else:
-            model = "mistral-small-latest"
+            # Use environment variable for Together.ai model
+            model = os.getenv("TOGETHER_MODEL", "meta-llama/Llama-2-70b-chat-hf")
+        else:  # mistral
+            # Use environment variable for Mistral model
+            model = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
     
     if provider == "groq":
         return _chat_groq(messages, temperature, model)
