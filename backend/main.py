@@ -29,7 +29,6 @@ _project_root = os.path.dirname(_backend_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from backend.graph import compiled_graph, build_graph, memory
 from backend.agents.intent_guard import intent_guard_node
 from backend.agents.answer_agent import answer_agent_node
 from backend.agents.hallucination_checker import hallucination_checker_node
