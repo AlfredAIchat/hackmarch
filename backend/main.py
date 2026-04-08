@@ -67,18 +67,44 @@ def _load_agents():
         if _project_root not in sys.path:
             sys.path.insert(0, _project_root)
         
+        # Import with detailed logging
+        print(f"DEBUG: Loading agents from: {_project_root}", file=sys.stderr)
+        
         from backend.agents.intent_guard import intent_guard_node
+        print(f"✓ intent_guard loaded", file=sys.stderr)
+        
         from backend.agents.answer_agent import answer_agent_node
+        print(f"✓ answer_agent loaded", file=sys.stderr)
+        
         from backend.agents.hallucination_checker import hallucination_checker_node
+        print(f"✓ hallucination_checker loaded", file=sys.stderr)
+        
         from backend.agents.concept_extractor import concept_extractor_node
+        print(f"✓ concept_extractor loaded", file=sys.stderr)
+        
         from backend.agents.concept_validator import concept_validator_node
+        print(f"✓ concept_validator loaded", file=sys.stderr)
+        
         from backend.agents.context_builder import context_builder_node
+        print(f"✓ context_builder loaded", file=sys.stderr)
+        
         from backend.agents.user_gate import user_gate_node
+        print(f"✓ user_gate loaded", file=sys.stderr)
+        
         from backend.agents.quiz_agent import quiz_agent_node
+        print(f"✓ quiz_agent loaded", file=sys.stderr)
+        
         from backend.agents.answer_evaluator import answer_evaluator_node
+        print(f"✓ answer_evaluator loaded", file=sys.stderr)
+        
         from backend.agents.report_agent import report_agent_node
+        print(f"✓ report_agent loaded", file=sys.stderr)
+        
         from backend.agents.file_reader_agent import file_reader_agent_node, extract_file_content
+        print(f"✓ file_reader_agent loaded", file=sys.stderr)
+        
         from backend.llm import chat
+        print(f"✓ chat/llm loaded", file=sys.stderr)
         
         _agents = {
             'intent_guard_node': intent_guard_node,
@@ -96,10 +122,11 @@ def _load_agents():
             'chat': chat,
         }
         _agents_loaded = True
+        print(f"✓ ALL AGENTS LOADED SUCCESSFULLY", file=sys.stderr)
         return True
         
     except Exception as e:
-        print(f"ERROR: Failed to load agents: {e}", file=sys.stderr)
+        print(f"✗ ERROR: Failed to load agents: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc(file=sys.stderr)
         _agents_loaded = False

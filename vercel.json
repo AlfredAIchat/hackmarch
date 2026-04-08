@@ -1,15 +1,15 @@
 {
-  "buildCommand": "npm run build && pip install -r backend/requirements.txt",
-  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install && python -m pip install -r backend/requirements.txt",
   "outputDirectory": ".next",
   "env": {
     "PYTHONUNBUFFERED": "1",
-    "PYTHONPATH": "."
+    "PYTHONPATH": "/var/task"
   },
   "functions": {
     "api/index.py": {
       "runtime": "python3.11",
-      "includeFiles": "backend/**"
+      "includeFiles": ["backend/**", "*.py"]
     }
   }
 }
