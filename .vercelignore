@@ -5,6 +5,7 @@ node_modules
 frontend/node_modules
 backend/__pycache__
 backend/*.pyc
+backend/tests
 .env
 .env.local
 .DS_Store
@@ -12,3 +13,8 @@ backend/*.pyc
 .idea
 *.md
 !README.md
+*.test.py
+*.spec.py
+pytest.ini
+coverage/
+__pycache__
