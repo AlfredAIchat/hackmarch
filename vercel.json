@@ -5,11 +5,5 @@
   "env": {
     "PYTHONUNBUFFERED": "1",
     "PYTHONPATH": "/var/task"
-  },
-  "functions": {
-    "api/index.py": {
-      "runtime": "python3.11",
-      "includeFiles": "{backend/**,backend/**/*.py}"
-    }
   }
 }
