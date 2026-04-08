@@ -289,14 +289,15 @@ export default function HomePage() {
     const treeNode = toTreeNode(store.treeData);
     const exploredConcepts = store.exploredTerms;
     const pipelineSteps = toPipelineSteps(store.pipelineNodes);
+    const isRateLimitError = (store.error || '').toLowerCase().includes('rate limit');
 
     return (
         <div style={{
             height: '100vh',
             display: 'flex',
             flexDirection: 'column',
-            background: 'linear-gradient(180deg, #FAFBFD 0%, #F5F7FA 100%)',
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            background: 'radial-gradient(circle at 12% 8%, rgba(14,165,164,0.10), transparent 30%), radial-gradient(circle at 88% 90%, rgba(37,99,235,0.12), transparent 32%), linear-gradient(180deg, #F8FAFC 0%, #EEF3FA 100%)',
+            fontFamily: "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
             overflow: 'hidden',
         }}>
 
@@ -309,7 +310,7 @@ export default function HomePage() {
                 height: '52px',
                 flexShrink: 0,
                 borderBottom: '1px solid #E2E8F0',
-                background: 'rgba(255,255,255,0.9)',
+                background: 'rgba(255,255,255,0.96)',
                 backdropFilter: 'blur(12px)',
                 WebkitBackdropFilter: 'blur(12px)',
             }}>
@@ -593,10 +594,16 @@ export default function HomePage() {
                                     <div className="animate-slide-up" style={{
                                         display: 'flex', alignItems: 'center', gap: '8px',
                                         padding: '10px 14px', borderRadius: '12px',
-                                        background: '#FEF2F2', border: '1px solid #FECACA',
+                                        background: isRateLimitError ? '#FFF7ED' : '#FEF2F2',
+                                        border: isRateLimitError ? '1px solid #FED7AA' : '1px solid #FECACA',
                                     }}>
                                         <span>⚠️</span>
-                                        <span style={{ fontSize: '12px', fontWeight: 500, color: '#991B1B', flex: 1 }}>
+                                        <span style={{
+                                            fontSize: '12px',
+                                            fontWeight: 600,
+                                            color: isRateLimitError ? '#9A3412' : '#991B1B',
+                                            flex: 1,
+                                        }}>
                                             {store.error}
                                         </span>
                                         <button onClick={() => store.setError(null)}

@@ -29,8 +29,9 @@ export async function POST(req: NextRequest) {
         });
 
         if (!resp.ok) {
+            const errText = await resp.text().catch(() => 'Backend error');
             return NextResponse.json(
-                { error: 'Backend error' },
+                { error: errText || 'Backend error' },
                 { status: resp.status }
             );
         }

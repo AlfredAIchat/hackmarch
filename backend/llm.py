@@ -22,17 +22,29 @@ _client: Optional[Mistral] = None
 def get_mistral_client() -> Mistral:
     global _client
     if _client is None:
-        api_key = os.getenv("MISTRAL_API_KEY", "")
+        api_key = os.getenv("MISTRAL_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError(
+                "MISTRAL_API_KEY is missing on the server. Set it in Vercel Environment Variables."
+            )
         _client = Mistral(api_key=api_key)
     return _client
 
 
 def chat(messages: list[dict], temperature: float = 0.3, model: str = "mistral-small-latest") -> str:
     """Convenience wrapper: returns the assistant content string."""
-    client = get_mistral_client()
-    resp = client.chat.complete(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-    )
-    return resp.choices[0].message.content.strip()
+    try:
+        client = get_mistral_client()
+        resp = client.chat.complete(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as exc:
+        message = str(exc)
+        if "401" in message or "Unauthorized" in message or "authentication" in message.lower():
+            raise RuntimeError(
+                "Mistral authentication failed (401). Verify MISTRAL_API_KEY in Vercel env settings."
+            ) from exc
+        raise RuntimeError(f"LLM request failed: {message}") from exc
