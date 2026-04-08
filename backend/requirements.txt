@@ -7,6 +7,6 @@ pydantic
 langchain
 langchain-openai
 langgraph
-mistralai
+mistralai==2.3.1
 aiofiles
 httpx
