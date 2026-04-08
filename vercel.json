@@ -3,9 +3,5 @@
     "api/index.py": {
       "runtime": "python3.11"
     }
-  },
-  "installCommand": "npm install && pip install -r api/backend/requirements.txt",
-  "env": {
-    "PYTHONUNBUFFERED": "1"
   }
 }
