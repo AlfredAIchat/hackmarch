@@ -1,0 +1,15 @@
+{
+  "experimentalServices": {
+    "web": {
+      "src": ".",
+      "framework": {
+        "slug": "nextjs"
+      }
+    }
+  },
+  "functions": {
+    "api/index.py": {
+      "runtime": "python3.11"
+    }
+  }
+}
