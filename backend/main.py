@@ -29,19 +29,6 @@ _project_root = os.path.dirname(_backend_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from backend.agents.intent_guard import intent_guard_node
-from backend.agents.answer_agent import answer_agent_node
-from backend.agents.hallucination_checker import hallucination_checker_node
-from backend.agents.concept_extractor import concept_extractor_node
-from backend.agents.concept_validator import concept_validator_node
-from backend.agents.context_builder import context_builder_node
-from backend.agents.user_gate import user_gate_node
-from backend.agents.quiz_agent import quiz_agent_node
-from backend.agents.answer_evaluator import answer_evaluator_node
-from backend.agents.report_agent import report_agent_node
-from backend.agents.file_reader_agent import file_reader_agent_node, extract_file_content
-from backend.llm import chat
-
 app = FastAPI(title="Alfred AI Pipeline API", version="1.0.0")
 
 # Get allowed origins from environment or use defaults
@@ -65,6 +52,49 @@ RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "25"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 _rate_limit_buckets: dict[str, list[float]] = {}
 
+# Lazy imports - only loaded when needed
+_agents_loaded = False
+_agents = {}
+
+def _load_agents():
+    """Lazy-load agent modules only when first needed."""
+    global _agents_loaded, _agents
+    if _agents_loaded:
+        return
+    
+    try:
+        from backend.agents.intent_guard import intent_guard_node
+        from backend.agents.answer_agent import answer_agent_node
+        from backend.agents.hallucination_checker import hallucination_checker_node
+        from backend.agents.concept_extractor import concept_extractor_node
+        from backend.agents.concept_validator import concept_validator_node
+        from backend.agents.context_builder import context_builder_node
+        from backend.agents.user_gate import user_gate_node
+        from backend.agents.quiz_agent import quiz_agent_node
+        from backend.agents.answer_evaluator import answer_evaluator_node
+        from backend.agents.report_agent import report_agent_node
+        from backend.agents.file_reader_agent import file_reader_agent_node, extract_file_content
+        from backend.llm import chat
+        
+        _agents = {
+            'intent_guard_node': intent_guard_node,
+            'answer_agent_node': answer_agent_node,
+            'hallucination_checker_node': hallucination_checker_node,
+            'concept_extractor_node': concept_extractor_node,
+            'concept_validator_node': concept_validator_node,
+            'context_builder_node': context_builder_node,
+            'user_gate_node': user_gate_node,
+            'quiz_agent_node': quiz_agent_node,
+            'answer_evaluator_node': answer_evaluator_node,
+            'report_agent_node': report_agent_node,
+            'file_reader_agent_node': file_reader_agent_node,
+            'extract_file_content': extract_file_content,
+            'chat': chat,
+        }
+        _agents_loaded = True
+    except Exception as e:
+        print(f"ERROR: Failed to load agents: {e}", file=sys.stderr)
+        raise
 
 def _client_ip(req: Request) -> str:
     forwarded = req.headers.get("x-forwarded-for", "")
@@ -177,6 +207,12 @@ def _check_relatedness(query: str, state: dict) -> bool:
 
 @app.post("/session/start")
 async def start_session(req: StartRequest):
+    # Load agents on first use
+    try:
+        _load_agents()
+    except Exception as e:
+        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    
     session_id = req.session_id or str(uuid.uuid4())
     query = req.query.strip()
 
@@ -244,7 +280,7 @@ async def start_session(req: StartRequest):
 
             # 1. Intent Guard
             yield _sse_event("node_activated", {"node": "intent_guard", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: intent_guard_node(state))
+            r = await loop.run_in_executor(None, lambda: _agents['intent_guard_node'](state))
             state.update(r)
             yield _sse_event("node_activated", {"node": "intent_guard", "status": "complete"})
 
@@ -258,19 +294,19 @@ async def start_session(req: StartRequest):
 
             # 2. File Reader Agent (if file uploaded)
             if state.get("file_context") and not state["file_context"].startswith("[PROCESSED]"):
-                r = await loop.run_in_executor(None, lambda: file_reader_agent_node(state))
+                r = await loop.run_in_executor(None, lambda: _agents['file_reader_agent_node'](state))
                 state.update(r)
 
             # 3. Context Builder (if continuation)
             if is_continuation:
                 yield _sse_event("node_activated", {"node": "context_builder", "status": "active"})
-                r = await loop.run_in_executor(None, lambda: context_builder_node(state))
+                r = await loop.run_in_executor(None, lambda: _agents['context_builder_node'](state))
                 state.update(r)
                 yield _sse_event("node_activated", {"node": "context_builder", "status": "complete"})
 
             # 4. Answer Agent
             yield _sse_event("node_activated", {"node": "answer_agent", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: answer_agent_node(state))
+            r = await loop.run_in_executor(None, lambda: _agents['answer_agent_node'](state))
             state.update(r)
             yield _sse_event("node_activated", {"node": "answer_agent", "status": "complete"})
 
@@ -279,8 +315,8 @@ async def start_session(req: StartRequest):
             yield _sse_event("node_activated", {"node": "concept_extractor", "status": "active"})
 
             # Copy state so concurrent nodes don't mutate the same dictionary during execution
-            t1 = loop.run_in_executor(None, lambda: hallucination_checker_node(dict(state)))
-            t2 = loop.run_in_executor(None, lambda: concept_extractor_node(dict(state)))
+            t1 = loop.run_in_executor(None, lambda: _agents['hallucination_checker_node'](dict(state)))
+            t2 = loop.run_in_executor(None, lambda: _agents['concept_extractor_node'](dict(state)))
 
             r1, r2 = await asyncio.gather(t1, t2)
             state.update(r1)
@@ -291,13 +327,13 @@ async def start_session(req: StartRequest):
 
             # 6. Concept Validator
             yield _sse_event("node_activated", {"node": "concept_validator", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: concept_validator_node(state))
+            r = await loop.run_in_executor(None, lambda: _agents['concept_validator_node'](state))
             state.update(r)
             yield _sse_event("node_activated", {"node": "concept_validator", "status": "complete"})
 
             # 7. User Gate
             yield _sse_event("node_activated", {"node": "user_gate", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: user_gate_node(state))
+            r = await loop.run_in_executor(None, lambda: _agents['user_gate_node'](state))
             state.update(r)
             yield _sse_event("node_activated", {"node": "user_gate", "status": "complete"})
 
@@ -377,6 +413,12 @@ def _make_fresh_state(
 
 @app.post("/session/select-term")
 async def select_term(req: SelectTermRequest):
+    # Load agents on first use
+    try:
+        _load_agents()
+    except Exception as e:
+        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    
     if req.session_id not in sessions:
         raise HTTPException(404, "Session not found")
 
@@ -398,13 +440,13 @@ async def select_term(req: SelectTermRequest):
 
             # 1. Context Builder
             yield _sse_event("node_activated", {"node": "context_builder", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: context_builder_node(state))
+            r = await loop.run_in_executor(None, lambda: _agents['context_builder_node'](state))
             state.update(r)
             yield _sse_event("node_activated", {"node": "context_builder", "status": "complete"})
 
             # 2. Answer Agent
             yield _sse_event("node_activated", {"node": "answer_agent", "status": "active"})
-            r = await loop.run_in_executor(None, lambda: answer_agent_node(state))
+            r = await loop.run_in_executor(None, lambda: _agents['answer_agent_node'](state))
             state.update(r)
             yield _sse_event("node_activated", {"node": "answer_agent", "status": "complete"})
 
@@ -470,6 +512,12 @@ async def select_term(req: SelectTermRequest):
 
 @app.post("/session/quiz")
 async def trigger_quiz(req: dict):
+    # Load agents on first use
+    try:
+        _load_agents()
+    except Exception as e:
+        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    
     session_id = req.get("session_id", "")
     if session_id not in sessions:
         raise HTTPException(404, "Session not found")
@@ -477,7 +525,7 @@ async def trigger_quiz(req: dict):
     state = sessions[session_id]
     try:
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: quiz_agent_node(state))
+        result = await loop.run_in_executor(None, lambda: _agents['quiz_agent_node'](state))
         state.update(result)
         sessions[session_id] = state
     except Exception as e:
@@ -516,6 +564,12 @@ async def upload_file(
     query: str = Form(""),
 ):
     """Handle file upload — extract text, then run file_reader_agent to summarize."""
+    # Load agents on first use
+    try:
+        _load_agents()
+    except Exception as e:
+        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    
     content_bytes = await file.read()
     filename = file.filename or "unknown"
 
@@ -537,7 +591,7 @@ async def upload_file(
     # Step 3: Run file_reader_agent to process and summarize the file
     try:
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: file_reader_agent_node(state))
+        result = await loop.run_in_executor(None, lambda: _agents['file_reader_agent_node'](state))
         state.update(result)
     except Exception as e:
         # If agent fails, keep raw text
@@ -556,12 +610,18 @@ async def upload_file(
 
 @app.get("/session/report/{session_id}")
 async def get_report(session_id: str):
+    # Load agents on first use
+    try:
+        _load_agents()
+    except Exception as e:
+        raise HTTPException(500, f"Failed to initialize backend: {str(e)}")
+    
     if session_id not in sessions:
         raise HTTPException(404, "Session not found")
 
     state = sessions[session_id]
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, lambda: report_agent_node(state))
+    result = await loop.run_in_executor(None, lambda: _agents['report_agent_node'](state))
     state.update(result)
     sessions[session_id] = state
 
@@ -578,6 +638,7 @@ async def health():
             "provider": "mistral",
             "key_present": has_mistral_key,
         },
+        "agents_loaded": _agents_loaded,
         "rate_limit": {
             "max_requests": RATE_LIMIT_MAX_REQUESTS,
             "window_seconds": RATE_LIMIT_WINDOW_SECONDS,
