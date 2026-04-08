@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 /* ─────────────────────────────────────────────
    Alfred AI — Premium Design System
    ───────────────────────────────────────────── */
@@ -71,8 +73,6 @@
   --radius-2xl: 24px;
   --radius-full: 9999px;
 }
-
-@import "tailwindcss";
 
 /* ─────────── Global Reset ─────────── */
 
