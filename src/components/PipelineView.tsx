@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 /* ─────── Types ─────── */
 export interface PipelineStep {
@@ -114,17 +115,21 @@ export default function PipelineView({ steps, className }: Props) {
                         background: `linear-gradient(180deg, ${isComplete ? '#10B981' : '#6366F1'} 0%, #E2E8F0 100%)`,
                     }} />
 
+                    <AnimatePresence>
                     {steps.map((step, i) => {
                         const colors = STATUS_COLORS[step.status];
                         const icon = Object.entries(ICONS).find(([k]) => step.id.includes(k))?.[1] || '●';
 
                         return (
-                            <div key={step.id}
-                                className="relative flex items-start gap-3 animate-slide-up"
+                            <motion.div 
+                                key={step.id}
+                                className="relative flex items-start gap-3"
+                                initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                                animate={{ opacity: 1, x: 0, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                transition={{ duration: 0.4, delay: i * 0.05, ease: "easeOut" }}
                                 style={{
                                     marginBottom: i < steps.length - 1 ? '12px' : 0,
-                                    animationDelay: `${i * 60}ms`,
-                                    animationFillMode: 'both',
                                 }}
                             >
                                 {/* Node dot */}
@@ -167,9 +172,10 @@ export default function PipelineView({ steps, className }: Props) {
                                         </p>
                                     )}
                                 </div>
-                            </div>
+                            </motion.div>
                         );
                     })}
+                    </AnimatePresence>
                 </div>
             </div>
 
