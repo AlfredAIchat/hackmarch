@@ -47,11 +47,11 @@ EOF
 ```
 
 ## Available Groq Models
-- `llama-3.1-70b-versatile` (default) - Latest, most capable
-- `llama-3.1-8b-instant` - Fast and lightweight
-- `gemma-7b-it` - Good alternative
+- `llama-3.3-70b-specdec` (default) - Latest, most capable and actively supported
+- `llama-3.1-8b-instant` - Fast and lightweight (if still available)
+- `qwen-qwq-32b` - Alternative reasoning model
 
-Full list: https://console.groq.com/docs/models
+**Note:** Groq frequently deprecates models. For the most current list, visit: https://console.groq.com/docs/models
 
 ## How to Use in Code
 
