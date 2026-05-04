@@ -329,8 +329,11 @@ export default function HomePage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '0 16px',
-                height: '52px',
+                padding: '8px 16px',
+                minHeight: '52px',
+                height: 'auto',
+                flexWrap: 'wrap',
+                gap: '8px',
                 flexShrink: 0,
                 borderBottom: '1px solid #E2E8F0',
                 background: 'rgba(255,255,255,0.96)',
@@ -477,7 +480,7 @@ export default function HomePage() {
                                     <div style={{
                                         width: '90px', height: '90px', borderRadius: '28px',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        background: 'linear-gradient(135deg, #4F46E5, #06B6D4)',
+                                        background: 'linear-gradient(135deg, #2563EB, #3B82F6)',
                                         boxShadow: '0 20px 60px rgba(79, 70, 229, 0.4), inset 0 2px 4px rgba(255,255,255,0.4)',
                                     }}>
                                         <span style={{ fontSize: '42px', fontWeight: 900, color: '#fff', textShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>A</span>
@@ -548,7 +551,7 @@ export default function HomePage() {
                                                 <div style={{
                                                     maxWidth: '80%', padding: '12px 20px',
                                                     borderRadius: '24px 24px 4px 24px', fontSize: '14px',
-                                                    background: 'linear-gradient(135deg, #4F46E5, #06B6D4)',
+                                                    background: 'linear-gradient(135deg, #2563EB, #3B82F6)',
                                                     color: 'white', boxShadow: '0 12px 32px rgba(79, 70, 229, 0.25)',
                                                     lineHeight: 1.6, fontWeight: 500,
                                                 }}>
@@ -562,7 +565,7 @@ export default function HomePage() {
                                                     width: '32px', height: '32px', borderRadius: '10px',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                     flexShrink: 0, marginTop: '2px',
-                                                    background: 'linear-gradient(135deg, #4F46E5, #06B6D4)',
+                                                    background: 'linear-gradient(135deg, #2563EB, #3B82F6)',
                                                     boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
                                                 }}>
                                                     <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>A</span>
