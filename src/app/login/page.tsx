@@ -30,7 +30,7 @@ export default function LandingPage() {
 
     useEffect(() => {
         if (mounted && isLoggedIn) {
-            router.push('/');
+            router.push('/dashboard');
         }
     }, [mounted, isLoggedIn, router]);
 
@@ -42,7 +42,7 @@ export default function LandingPage() {
         setTimeout(() => {
             const username = name.trim().toLowerCase().replace(/\s+/g, '_');
             login(username, name.trim());
-            router.push('/');
+            router.push('/dashboard');
         }, 600);
     };
 

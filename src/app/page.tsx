@@ -83,7 +83,7 @@ export default function LandingPage() {
     return () => clearInterval(t);
   }, []);
 
-  const goSignUp = () => router.push('/login');
+  const goSignUp = () => router.push('/dashboard');
 
   return (
     <div className="l-root">
