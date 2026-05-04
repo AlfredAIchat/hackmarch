@@ -348,7 +348,7 @@ export default function HomePage() {
                         background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
                         boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
                     }}>
-                        <span style={{ fontSize: '13px', fontWeight: 900, color: '#fff' }}>A</span>
+                        <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                     </div>
                     <div>
                         <div className="gradient-text" style={{ fontSize: '13px', fontWeight: 800, lineHeight: 1.2 }}>
@@ -361,7 +361,7 @@ export default function HomePage() {
                 </div>
 
                 {/* Center stats */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                <div className="hidden sm:flex items-center gap-[12px] min-w-0">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
                         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: '#6366F1' }}>
                             D{store.currentDepth}
@@ -483,7 +483,7 @@ export default function HomePage() {
                                         background: 'linear-gradient(135deg, #2563EB, #3B82F6)',
                                         boxShadow: '0 20px 60px rgba(79, 70, 229, 0.4), inset 0 2px 4px rgba(255,255,255,0.4)',
                                     }}>
-                                        <span style={{ fontSize: '42px', fontWeight: 900, color: '#fff', textShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>A</span>
+                                        <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                                     </div>
                                 </motion.div>
                                 <motion.div 
@@ -568,7 +568,7 @@ export default function HomePage() {
                                                     background: 'linear-gradient(135deg, #2563EB, #3B82F6)',
                                                     boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
                                                 }}>
-                                                    <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>A</span>
+                                                    <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                                                 </div>
                                                 <div style={{ flex: 1, minWidth: 0 }}>
                                                     {/* Depth badge */}

@@ -30,9 +30,9 @@ const MAX_ZOOM = 2.5;
 function nodeColors(status?: string, relevance?: number) {
     const mustLearn = status === 'must-learn' || (relevance && relevance >= 0.8);
     if (status === 'active') return {
-        bg: '#EEF2FF', border: '#6366F1', text: '#4338CA',
-        glow: '0 0 0 4px rgba(99,102,241,0.15), 0 4px 16px rgba(99,102,241,0.2)',
-        icon: '⚡', badgeBg: '#6366F1', badgeText: '#fff'
+        bg: '#EEF2FF', border: '#2563EB', text: '#4338CA',
+        glow: '0 0 0 4px rgba(37,99,235,0.15), 0 4px 16px rgba(37,99,235,0.2)',
+        icon: '⚡', badgeBg: '#2563EB', badgeText: '#fff'
     };
     if (mustLearn) return {
         bg: '#FEF2F2', border: '#EF4444', text: '#991B1B',
@@ -260,16 +260,16 @@ export default function KnowledgeTree({ data, onNodeClick, className }: Props) {
             <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10">
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold"
                     style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid #E2E8F0', color: '#64748B', backdropFilter: 'blur(8px)' }}>
-                    <span style={{ color: '#6366F1' }}>{nodes.length}</span> nodes
+                    <span style={{ color: '#2563EB' }}>{nodes.length}</span> nodes
                     <span className="mx-1" style={{ color: '#E2E8F0' }}>•</span>
                     <span style={{ color: '#10B981' }}>{nodes.filter(n => n.status === 'explored').length}</span> explored
                 </div>
             </div>
 
             {/* Legend */}
-            <div className="absolute bottom-3 right-3 flex items-center gap-3 z-10">
+            <div className="hidden sm:flex absolute bottom-3 right-3 items-center gap-3 z-10">
                 {[
-                    { color: '#6366F1', label: 'Active' },
+                    { color: '#2563EB', label: 'Active' },
                     { color: '#10B981', label: 'Explored' },
                     { color: '#EF4444', label: 'Must Learn' },
                     { color: '#F59E0B', label: 'Suggested' },
@@ -306,7 +306,7 @@ export default function KnowledgeTree({ data, onNodeClick, className }: Props) {
                         <feMerge><feMergeNode in="glow1" /><feMergeNode in="SourceGraphic" /></feMerge>
                     </filter>
                     <linearGradient id="edge-gradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#6366F1" stopOpacity="0.4" />
+                        <stop offset="0%" stopColor="#2563EB" stopOpacity="0.4" />
                         <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0.15" />
                     </linearGradient>
                     <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
@@ -329,7 +329,7 @@ export default function KnowledgeTree({ data, onNodeClick, className }: Props) {
                             <path key={`edge-${i}`}
                                 d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
                                 fill="none"
-                                stroke={isHovered ? '#4F46E5' : 'url(#edge-gradient)'}
+                                stroke={isHovered ? '#2563EB' : 'url(#edge-gradient)'}
                                 strokeWidth={isHovered ? 3 : 2}
                                 strokeLinecap="round"
                                 strokeDasharray={isHovered ? "none" : "6 6"}
@@ -452,7 +452,7 @@ export default function KnowledgeTree({ data, onNodeClick, className }: Props) {
                                         rx={14}
                                         ry={14}
                                         fill="none"
-                                        stroke="#6366F1"
+                                        stroke="#2563EB"
                                         strokeWidth="1.5"
                                         opacity="0.4"
                                         style={{ animation: 'node-glow 1.5s ease-in-out infinite' }}

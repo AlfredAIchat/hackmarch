@@ -34,7 +34,7 @@ const ICONS: Record<string, string> = {
 
 const STATUS_COLORS = {
     idle: { bg: '#F8FAFC', border: '#E2E8F0', text: '#94A3B8', dot: '#CBD5E1' },
-    active: { bg: '#EEF2FF', border: '#6366F1', text: '#4338CA', dot: '#6366F1' },
+    active: { bg: '#EFF6FF', border: '#2563EB', text: '#1E40AF', dot: '#2563EB' },
     done: { bg: '#ECFDF5', border: '#10B981', text: '#065F46', dot: '#10B981' },
     error: { bg: '#FEF2F2', border: '#EF4444', text: '#991B1B', dot: '#EF4444' },
 };
@@ -108,12 +108,12 @@ export default function PipelineView({ steps, className }: Props) {
             </div>
 
             {/* Steps list */}
-            <div className="flex-1 overflow-y-auto px-4 py-3">
-                <div className="relative">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+                <div className="relative pl-4">
                     {/* Connecting line */}
-                    <div className="absolute left-[15px] top-0 bottom-0 w-[2px]" style={{
-                        background: `linear-gradient(180deg, ${isComplete ? '#10B981' : '#4F46E5'} 0%, ${hasError ? '#EF4444' : '#06B6D4'} 50%, rgba(226, 232, 240, 0.4) 100%)`,
-                        boxShadow: '0 0 10px rgba(6, 182, 212, 0.3)',
+                    <div className="absolute left-[26px] top-0 bottom-0 w-[2px]" style={{
+                        background: `linear-gradient(180deg, ${isComplete ? '#10B981' : '#2563EB'} 0%, ${hasError ? '#EF4444' : '#60A5FA'} 50%, rgba(226, 232, 240, 0.4) 100%)`,
+                        boxShadow: '0 0 10px rgba(59, 130, 246, 0.3)',
                     }} />
 
                     <AnimatePresence>
@@ -124,56 +124,65 @@ export default function PipelineView({ steps, className }: Props) {
                         return (
                             <motion.div 
                                 key={step.id}
-                                className="relative flex items-start gap-3"
-                                initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                                className="relative flex items-center gap-4"
+                                initial={{ opacity: 0, x: -30, scale: 0.95 }}
                                 animate={{ opacity: 1, x: 0, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.9 }}
-                                transition={{ duration: 0.4, delay: i * 0.05, ease: "easeOut" }}
+                                transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
                                 style={{
-                                    marginBottom: i < steps.length - 1 ? '12px' : 0,
+                                    marginBottom: i < steps.length - 1 ? '16px' : 0,
                                 }}
                             >
                                 {/* Node dot */}
-                                <div className="relative z-10 flex-shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center text-xs"
+                                <div className="relative z-10 flex-shrink-0 w-[36px] h-[36px] rounded-full flex items-center justify-center text-xs"
                                     style={{
                                         background: colors.bg,
                                         border: `2px solid ${colors.border}`,
-                                        boxShadow: step.status === 'active' ? `0 0 20px rgba(99,102,241,0.6), inset 0 0 10px rgba(99,102,241,0.2)` : undefined,
+                                        boxShadow: step.status === 'active' ? `0 0 20px rgba(37,99,235,0.5), inset 0 0 10px rgba(37,99,235,0.2)` : undefined,
                                         transform: step.status === 'active' ? 'scale(1.15)' : 'scale(1)',
                                         transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
                                     }}
                                 >
                                     {step.status === 'active' ? (
-                                        <div className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#6366F1', borderTopColor: 'transparent' }} />
+                                        <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#2563EB', borderTopColor: 'transparent' }} />
                                     ) : step.status === 'done' ? (
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>
                                     ) : step.status === 'error' ? (
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
                                     ) : (
                                         <div className="w-2 h-2 rounded-full" style={{ background: '#CBD5E1' }} />
                                     )}
                                 </div>
 
-                                {/* Step content */}
-                                <div className="flex-1 min-w-0 py-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm" style={{ opacity: step.status === 'idle' ? 0.5 : 1 }}>
-                                            {icon}
-                                        </span>
-                                        <span className="text-xs font-semibold truncate" style={{ color: colors.text }}>
-                                            {step.label}
-                                        </span>
-                                        {step.duration != null && step.status === 'done' && (
-                                            <span className="text-[10px] font-mono ml-auto flex-shrink-0" style={{ color: '#94A3B8' }}>
-                                                {(step.duration / 1000).toFixed(1)}s
-                                            </span>
-                                        )}
+                                {/* Step content - Glassmorphic Card */}
+                                <div className="flex-1 min-w-0 py-2 px-4 rounded-[16px] backdrop-blur-md transition-all duration-300"
+                                     style={{
+                                        background: step.status === 'active' ? 'linear-gradient(135deg, rgba(37,99,235,0.08), rgba(96,165,250,0.08))' : 'rgba(255,255,255,0.6)',
+                                        border: `1px solid ${step.status === 'active' ? 'rgba(37,99,235,0.2)' : 'rgba(226,232,240,0.6)'}`,
+                                        boxShadow: step.status === 'active' ? '0 12px 32px rgba(37,99,235,0.1)' : '0 4px 12px rgba(0,0,0,0.02)',
+                                     }}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white shadow-sm flex-shrink-0" style={{ opacity: step.status === 'idle' ? 0.5 : 1 }}>
+                                            <span className="text-sm">{icon}</span>
+                                        </div>
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold truncate tracking-wide uppercase" style={{ color: colors.text }}>
+                                                    {step.label}
+                                                </span>
+                                                {step.duration != null && step.status === 'done' && (
+                                                    <span className="text-[10px] font-mono ml-auto flex-shrink-0 bg-white px-2 py-0.5 rounded-full border border-emerald-100" style={{ color: '#10B981' }}>
+                                                        {(step.duration / 1000).toFixed(1)}s
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {step.detail && step.status !== 'idle' && (
+                                                <p className="text-[11px] mt-1 font-medium truncate" style={{ color: '#64748B' }}>
+                                                    {step.detail}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
-                                    {step.detail && step.status !== 'idle' && (
-                                        <p className="text-[11px] mt-0.5 leading-relaxed truncate" style={{ color: '#94A3B8' }}>
-                                            {step.detail}
-                                        </p>
-                                    )}
                                 </div>
                             </motion.div>
                         );
