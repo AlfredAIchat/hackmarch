@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./landing.css";
 
 export const metadata: Metadata = {
   title: "Alfred AI — Recursive Learning Engine | Learn Anything, Explore Everything",

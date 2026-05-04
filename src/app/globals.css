@@ -863,10 +863,11 @@ html, body {
 }
 
 /* ╔══════════════════════════════════════════════════════════════╗ */
-/* ║            LANDING PAGE — World-Class Design                ║ */
+/* ║        LANDING PAGE — VIBRANT & BOLD DESIGN V2              ║ */
 /* ╚══════════════════════════════════════════════════════════════╝ */
 
-.landing-root {
+/* ── Root ── */
+.l-root {
   min-height: 100vh;
   background: linear-gradient(180deg, #F0F7FF 0%, #FFFFFF 35%, #F8FBFF 65%, #EFF6FF 100%);
   font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
