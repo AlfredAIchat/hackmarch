@@ -319,8 +319,8 @@ export default function HomePage() {
             height: '100vh',
             display: 'flex',
             flexDirection: 'column',
-            background: 'radial-gradient(circle at 12% 8%, rgba(14,165,164,0.10), transparent 30%), radial-gradient(circle at 88% 90%, rgba(37,99,235,0.12), transparent 32%), linear-gradient(180deg, #F8FAFC 0%, #EEF3FA 100%)',
-            fontFamily: "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            background: 'radial-gradient(circle at 15% 50%, rgba(79, 70, 229, 0.08), transparent 50%), radial-gradient(circle at 85% 30%, rgba(6, 182, 212, 0.08), transparent 50%), linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
             overflow: 'hidden',
         }}>
 
@@ -475,12 +475,12 @@ export default function HomePage() {
                                     style={{ position: 'relative' }}
                                 >
                                     <div style={{
-                                        width: '72px', height: '72px', borderRadius: '20px',
+                                        width: '90px', height: '90px', borderRadius: '28px',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        background: 'linear-gradient(135deg, #0EA5A4, #2563EB)',
-                                        boxShadow: '0 16px 50px rgba(37,99,235,0.3)',
+                                        background: 'linear-gradient(135deg, #4F46E5, #06B6D4)',
+                                        boxShadow: '0 20px 60px rgba(79, 70, 229, 0.4), inset 0 2px 4px rgba(255,255,255,0.4)',
                                     }}>
-                                        <span style={{ fontSize: '32px', fontWeight: 900, color: '#fff' }}>A</span>
+                                        <span style={{ fontSize: '42px', fontWeight: 900, color: '#fff', textShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>A</span>
                                     </div>
                                 </motion.div>
                                 <motion.div 
@@ -546,11 +546,11 @@ export default function HomePage() {
                                             /* User message */
                                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                                                 <div style={{
-                                                    maxWidth: '80%', padding: '10px 16px',
-                                                    borderRadius: '16px 16px 4px 16px', fontSize: '13px',
-                                                    background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
-                                                    color: 'white', boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
-                                                    lineHeight: 1.5,
+                                                    maxWidth: '80%', padding: '12px 20px',
+                                                    borderRadius: '24px 24px 4px 24px', fontSize: '14px',
+                                                    background: 'linear-gradient(135deg, #4F46E5, #06B6D4)',
+                                                    color: 'white', boxShadow: '0 12px 32px rgba(79, 70, 229, 0.25)',
+                                                    lineHeight: 1.6, fontWeight: 500,
                                                 }}>
                                                     {msg.content}
                                                 </div>
@@ -559,12 +559,13 @@ export default function HomePage() {
                                             /* Assistant message */
                                             <div style={{ display: 'flex', gap: '10px' }}>
                                                 <div style={{
-                                                    width: '28px', height: '28px', borderRadius: '8px',
+                                                    width: '32px', height: '32px', borderRadius: '10px',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                     flexShrink: 0, marginTop: '2px',
-                                                    background: '#EEF2FF', border: '1px solid #C7D2FE',
+                                                    background: 'linear-gradient(135deg, #4F46E5, #06B6D4)',
+                                                    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
                                                 }}>
-                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#6366F1' }}>A</span>
+                                                    <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>A</span>
                                                 </div>
                                                 <div style={{ flex: 1, minWidth: 0 }}>
                                                     {/* Depth badge */}

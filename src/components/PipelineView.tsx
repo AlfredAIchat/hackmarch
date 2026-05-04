@@ -112,7 +112,8 @@ export default function PipelineView({ steps, className }: Props) {
                 <div className="relative">
                     {/* Connecting line */}
                     <div className="absolute left-[15px] top-0 bottom-0 w-[2px]" style={{
-                        background: `linear-gradient(180deg, ${isComplete ? '#10B981' : '#6366F1'} 0%, #E2E8F0 100%)`,
+                        background: `linear-gradient(180deg, ${isComplete ? '#10B981' : '#4F46E5'} 0%, ${hasError ? '#EF4444' : '#06B6D4'} 50%, rgba(226, 232, 240, 0.4) 100%)`,
+                        boxShadow: '0 0 10px rgba(6, 182, 212, 0.3)',
                     }} />
 
                     <AnimatePresence>
@@ -137,7 +138,9 @@ export default function PipelineView({ steps, className }: Props) {
                                     style={{
                                         background: colors.bg,
                                         border: `2px solid ${colors.border}`,
-                                        boxShadow: step.status === 'active' ? `0 0 0 4px rgba(99,102,241,0.12)` : undefined,
+                                        boxShadow: step.status === 'active' ? `0 0 20px rgba(99,102,241,0.6), inset 0 0 10px rgba(99,102,241,0.2)` : undefined,
+                                        transform: step.status === 'active' ? 'scale(1.15)' : 'scale(1)',
+                                        transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
                                     }}
                                 >
                                     {step.status === 'active' ? (

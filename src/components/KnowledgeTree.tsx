@@ -291,17 +291,19 @@ export default function KnowledgeTree({ data, onNodeClick, className }: Props) {
                     <filter id="node-shadow">
                         <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.08" />
                     </filter>
-                    <filter id="glow-brand">
-                        <feGaussianBlur stdDeviation="6" result="blur" />
-                        <feFlood floodColor="#6366F1" floodOpacity="0.2" />
-                        <feComposite in2="blur" operator="in" />
-                        <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+                    <filter id="glow-brand" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="8" result="blur" />
+                        <feComponentTransfer in="blur" result="glow1">
+                            <feFuncA type="linear" slope="1.5"/>
+                        </feComponentTransfer>
+                        <feMerge><feMergeNode in="glow1" /><feMergeNode in="SourceGraphic" /></feMerge>
                     </filter>
-                    <filter id="glow-danger">
-                        <feGaussianBlur stdDeviation="5" result="blur" />
-                        <feFlood floodColor="#EF4444" floodOpacity="0.2" />
-                        <feComposite in2="blur" operator="in" />
-                        <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+                    <filter id="glow-danger" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="8" result="blur" />
+                        <feComponentTransfer in="blur" result="glow1">
+                            <feFuncA type="linear" slope="2"/>
+                        </feComponentTransfer>
+                        <feMerge><feMergeNode in="glow1" /><feMergeNode in="SourceGraphic" /></feMerge>
                     </filter>
                     <linearGradient id="edge-gradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#6366F1" stopOpacity="0.4" />
@@ -327,13 +329,14 @@ export default function KnowledgeTree({ data, onNodeClick, className }: Props) {
                             <path key={`edge-${i}`}
                                 d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
                                 fill="none"
-                                stroke={isHovered ? '#6366F1' : 'url(#edge-gradient)'}
-                                strokeWidth={isHovered ? 2.5 : 1.8}
+                                stroke={isHovered ? '#4F46E5' : 'url(#edge-gradient)'}
+                                strokeWidth={isHovered ? 3 : 2}
                                 strokeLinecap="round"
-                                markerEnd="url(#arrow)"
+                                strokeDasharray={isHovered ? "none" : "6 6"}
                                 style={{
                                     transition: 'stroke 0.2s, stroke-width 0.2s',
-                                    opacity: isHovered ? 1 : 0.7,
+                                    opacity: isHovered ? 1 : 0.8,
+                                    animation: isHovered ? 'none' : 'data-flow 2s linear infinite'
                                 }}
                             />
                         );
